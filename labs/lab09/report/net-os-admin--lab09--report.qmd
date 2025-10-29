@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -13,55 +11,257 @@ author:
       address: ул. Миклухо-Маклая, д. 6
 
 ## Title
-title: "Шаблон отчёта по лабораторной работе"
-subtitle: "Простейший вариант"
+title: "Лабораторная работа №9"
+subtitle: "Настройка POP3/IMAP сервера"
 license: "CC BY"
 ---
 
 # Цель работы
 
-Здесь приводится формулировка цели лабораторной работы.
-Формулировки цели для каждой лабораторной работы приведены в методических указаниях.
-
-Цель данного шаблона --- максимально упростить подготовку отчётов по лабораторным работам.
-Модифицируя данный шаблон, студенты смогут без труда подготовить отчёт по лабораторным работам, а также познакомиться с основными возможностями разметки Markdown.
+Приобретение практических навыков по установке и простейшему конфигурированию POP3/IMAP-сервера.
 
 # Задание
 
-Здесь приводится описание задания в соответствии с рекомендациями методического пособия и выданным вариантом.
+1. Установить на виртуальной машине ```server``` Dovecot и Telnet для дальнейшей проверки корректности работы почтового сервера.
 
-# Теоретическое введение
+2. Настройка Dovecot.
 
-Здесь описываются теоретические аспекты, связанные с выполнением работы.
+3. Установить на виртуальной машине ```client``` программу для чтения почты Evolution и настроить её для манипуляций с почтой моего пользователя. Проверить корректность работы почтового сервера как с виртуальной машины ```server```, так и с виртуальной машины ```client```.
 
-Например, в [табл. @tbl-std-dir] приведено краткое описание стандартных каталогов Unix.
-
-| Имя каталога | Описание каталога                                                                                                          |
-|--------------|----------------------------------------------------------------------------------------------------------------------------|
-| `/`          | Корневая директория, содержащая всю файловую                                                                               |
-| `/bin `      | Основные системные утилиты, необходимые как в однопользовательском режиме, так и при обычной работе всем пользователям     |
-| `/etc`       | Общесистемные конфигурационные файлы и файлы конфигурации установленных программ                                           |
-| `/home`      | Содержит домашние директории пользователей, которые, в свою очередь, содержат персональные настройки и данные пользователя |
-| `/media`     | Точки монтирования для сменных носителей                                                                                   |
-| `/root`      | Домашняя директория пользователя  `root`                                                                                   |
-| `/tmp`       | Временные файлы                                                                                                            |
-| `/usr`       | Вторичная иерархия для данных пользователя                                                                                 |
-
-: Описание некоторых каталогов файловой системы GNU Linux {#tbl-std-dir}
-
-Более подробно про Unix см. в [@tanenbaum_book_modern-os_ru; @robbins_book_bash_en; @zarrelli_book_mastering-bash_en; @newham_book_learning-bash_en].
+4. Изменить скрипт для Vagrant, фиксирующий действия по установке и настройке Postfix и Dovecot во внутреннем окружении виртуальной машины ```server```, создать скрипт для Vagrant, фиксирующий действия по установке Evolution во внутреннем окружении виртуальной машины ```client```. Соотвествующим образом внести изменения в Vagrantfile.
 
 # Выполнение лабораторной работы
 
-Описываются проведённые действия, в качестве иллюстрации даётся ссылка на иллюстрацию ([рис. @fig-001]).
+## Установка, настройка и работа с Dovecot
 
-![V Сольвеевский конгресс (1927) «Электроны и фотоны»](image/solvay.jpg){#fig-001 width=70%}
+В начале под суперпользователем устанавливаю на виртуальную машину ```server``` необходимые для работы пакеты:
+
+```
+dnf -y install dovecot telnet
+```
+
+Далее настраиваю Dovecot, проверя и внося изменения 
+
+в файл ```/etc/dovecot/dovecot.conf``:
+
+```conf
+protocols = imap pop3
+```
+
+Файл ```/etc/dovecot/conf.d/10-auth.conf```:
+
+```conf
+auth_mechanisms = plain
+```
+Файл ```/etc/dovecot/conf.d/auth-system.conf.ext```:
+
+```conf
+passdb {
+  driver = pam
+}
+userdb {
+  driver = passwd
+}
+```
+Файл ```/etc/dovecot/conf.d/10-mail.conf```:
+
+```conf
+mail_location = maildir:~/Maildir
+```
+
+После в Postfix задаю каталог для доставки почты:
+
+```
+postconf -e 'home_mailbox = Maildir/'
+```
+
+Добавляю необходимые сервисы в firewalld:
+
+```
+firewall-cmd --add-service=pop3 --permanent
+firewall-cmd --add-service=pop3s --permanent
+firewall-cmd --add-service=imap --permanent
+firewall-cmd --add-service=imaps --permanent
+firewall-cmd --reload
+```
+
+Восстанавливаю контекст безопасности в SELinux:
+
+```
+restorecon -vR /etc
+```
+
+И перезапускаю Postfix и запускаю Dovecot ([рис. @fig-001]):
+
+```
+systemctl restart postfix
+systemctl enable dovecot
+systemctl start dovecot
+```
+
+![Настройка Dovecot](image/1.png){#fig-001 width=70%}
+
+В дополнительном терминале виртуальной машины ```server``` запускаю мониторинг работы почтовой службы ([рис. @fig-002]):
+
+```
+tail -f /var/log/maillog
+```
+
+![Мониторинг работы почтовой службы](image/2.png){#fig-002 width=70%}
+
+
+Для просмотра имеющейся почты использую команду:
+
+```
+MAIL=~/Maildir mail
+```
+
+А для просмотра почты пользователя использую с правами суперпользователя ([рис. @fig-003]):
+
+```
+doveadm mailbox list -u avagaev
+```
+
+![Просмотр почты](image/3.png){#fig-003 width=70%}
+
+Теперь проверю работу почты через ВМ ```client```. Для этого устанавливаю почтовый клиент Evolution, выполнив в терминале с правами суперпользователя:
+
+```
+dnf -y install evolution
+```
+
+После запускаю Evolution и настраиваю почтовый клиент. В настройках учетной записи указываю имя и адрес почты в виде ```user@user.net``` ([рис. @fig-004]).
+
+![Настройка Evolution. Имя и почта](image/4.png){#fig-004 width=70%}
+
+Настраиваю IMAP ([рис. @fig-005]).
+
+![Настройка Evolution. IMAP](image/5.png){#fig-005 width=70%}
+
+Настраиваю SMTP ([рис. @fig-006]).
+
+![Настройка Evolution. SMTP](image/6.png){#fig-006 width=70%}
+
+Далее отправляю тестовые писма и проверяю сообщения почтовой службы на сервере ([рис. @fig-007] и [рис. @fig-008]).
+
+![Отправка тестовых сообщений](image/7.png){#fig-007 width=70%}
+
+![Просмотр сообщений на сервере](image/8.png){#fig-008 width=70%}
+
+Также, на ВМ ```server``` проверил работы почтовой службы, используя протокол Telnet. Подключился, используя:
+
+```
+telnet mail.avagaev.net 110
+user avagaev
+pass Street200!
+```
+
+После выполнил несколько действий, а именно ([рис. @fig-009]):
+
+- получил список писем командой ```list```;
+
+- получил первое письмо из списка командой ```retr 1```;
+
+- удалил второе письмо из списка командой ```dele 2```;
+
+- завершил сеанс работы с telnet командой ```quit```.
+
+![Работа через Telnet](image/9.png){#fig-009 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальной машины
+
+На виртуальной машине ```server``` перешел в каталог ```/vagrant/provision/server``` и поместил конфигурационные файлы Dovecot в соответствующие подкаталоги:
+
+```
+mkdir -p /vagrant/provision/server/mail/etc/dovecot/conf.d
+
+cp -R /etc/dovecot/dovecot.conf \
+/vagrant/provision/server/mail/etc/dovecot/
+
+cp -R /etc/dovecot/conf.d/10-auth.conf \
+/vagrant/provision/server/mail/etc/dovecot/conf.d/
+
+cp -R /etc/dovecot/conf.d/auth-system.conf.ext \
+/vagrant/provision/server/mail/etc/dovecot/conf.d/
+
+cp -R /etc/dovecot/conf.d/10-mail.conf \
+/vagrant/provision/server/mail/etc/dovecot/conf.d/
+```
+
+Внес изменения в файл ```/vagrant/provision/server/mail.sh```:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install postfix
+dnf -y install s-nail
+dnf -y install dovecot
+dnf -y install telnet
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/mail/etc/* /etc
+
+chown -R root:root /etc/postfix
+restorecon -vR /etc
+
+echo "Configure firewall"
+firewall-cmd --add-service=smtp --permanent
+firewall-cmd --add-service=pop3 --permanent
+firewall-cmd --add-service=pop3s --permanent
+firewall-cmd --add-service=imap --permanent
+firewall-cmd --add-service=imaps --permanent
+firewall-cmd --reload
+
+restorecon -vR /etc
+
+echo "Start postfix service"
+systemctl enable postfix
+systemctl start postfix
+
+echo "Configure postfix"
+postconf -e 'mydomain = avagaev.net'
+postconf -e 'myorigin = $mydomain'
+postconf -e 'inet_protocols = ipv4'
+postconf -e 'inet_interfaces = all'
+postconf -e 'mydestination = $myhostname, localhost.$mydomain, 
+localhost, $mydomain'
+postconf -e 'mynetworks = 127.0.0.0/8, 192.168.0.0/16'
+postconf -e 'home_mailbox = Maildir/'
+
+postfix set-permissions
+
+restorecon -vR /etc
+
+systemctl stop postfix
+systemctl start postfix
+systemctl enable dovecot
+systemctl start dovecot
+```
+
+На виртуальной машине ```client``` добавил установку Evolution в файл 
+```/vagrant/provision/client/mail.sh```:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install postfix
+dnf -y install s-nail
+dnf -y install evolution
+
+echo "Configure postfix"
+postconf -e 'inet_protocols = ipv4'
+
+echo "Start postfix service"
+systemctl enable postfix
+systemctl start postfix
+```
 
 # Выводы
 
-Здесь кратко описываются итоги проделанной работы.
-
-# Список литературы{.unnumbered}
-
-::: {#refs}
-:::
+Я успешно приобрел практические навыки по установке и простейшему конфигурированию POP3/IMAP-сервера.
