@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -12,8 +10,8 @@ author:
       city: Москва
       address: ул. Миклухо-Маклая, д. 6
 ## Title
-title: Структура научной презентации
-subtitle: Простейший вариант
+title: Лабораторная работа №10
+subtitle: Расширенные настройки SMTP-сервера
 license: CC BY
 date: today
 date-format: "YYYY-MM-DD" # Example: 2025-09-06
@@ -26,175 +24,219 @@ date-format: "YYYY-MM-DD" # Example: 2025-09-06
 :::::::::::::: {.columns align=center}
 ::: {.column width="70%"}
 
-  * Кулябов Дмитрий Сергеевич
-  * д.ф.-м.н., профессор
-  * профессор кафедры теории вероятностей и кибербезопасности
+  * Арсений Валерьевич Агаев
+  * студент
   * Российский университет дружбы народов им. П. Лумумбы
-  * [kulyabov-ds@rudn.ru](mailto:kulyabov-ds@rudn.ru)
-  * <https://yamadharma.github.io/ru/>
+  * [1032221668@rudn.ru](mailto:1032221668@rudn.ru)
 
 :::
 ::: {.column width="30%"}
 
-![](./image/kulyabov.jpg)
-
 :::
 ::::::::::::::
 
-# Вводная часть
 
-## Актуальность
+# Цели и задачи
 
-- Важно донести результаты своих исследований до окружающих
-- Научная презентация --- рабочий инструмент исследователя
-- Необходимо создавать презентацию быстро
-- Желательна минимизация усилий для создания презентации
+Приобретение практических навыков по конфигурированию SMTP-сервера в части
+настройки аутентификации.
 
-## Объект и предмет исследования
+- Настройка Dovecot для работы с LMTP.
 
-- Презентация как текст
-- Программное обеспечение для создания презентаций
-- Входные и выходные форматы презентаций
+- Настройка аутентификации посредством SASL на SMTP-сервере.
 
-## Цели и задачи
+- Настройка работы SMTP-сервера поверх TLS.
 
-- Создать шаблон презентации в Markdown
-- Описать алгоритм создания выходных форматов презентаций
+- Скорректировать скрипт для Vagrant, фиксирующий проделанные действия.
 
-## Материалы и методы
+# Содержание исследования
 
-- Процессор `pandoc` для входного формата Markdown
-- Результирующие форматы
-	- `pdf`
-	- `html`
-- Автоматизация процесса создания: `Makefile`
+## Настройка LMTP в Dovecot
 
-# Создание презентации
+![Мониторинг почтовой службы](image/1.png){#fig-001 width=70%}
 
-## Процессор `pandoc`
+## Настройка LMTP в Dovecot
 
-- Pandoc: преобразователь текстовых файлов
-- Сайт: <https://pandoc.org/>
-- Репозиторий: <https://github.com/jgm/pandoc>
+После в файле ```/etc/dovecot/dovecot.conf``` добавляю протокол LMTP:
 
-## Формат `pdf`
-
-- Использование LaTeX
-- Пакет для презентации: [beamer](https://ctan.org/pkg/beamer)
-- Тема оформления: `metropolis`
-
-## Код для формата `pdf`
-
-```yaml
-slide_level: 2
-aspectratio: 169
-section-titles: true
-theme: metropolis
+```conf
+protocols = imap pop3 lmtp
 ```
 
-## Формат `html`
+В файле ```/etc/dovecot/conf.d/10-master.conf``` переопределяю сервис lmtp:
 
-- Используется фреймворк [reveal.js](https://revealjs.com/)
-- Используется [тема](https://revealjs.com/themes/) `beige`
-
-## Код для формата `html`
-
-- Тема задаётся в файле `Makefile`
-
-```make
-REVEALJS_THEME = beige
+```conf
+service lmtp {
+  unix_listener /var/spool/postfix/private/dovecot-lmtp {
+    group = postfix
+    user = postfix
+    mode = 0600
+  }
+}
 ```
+
+## Настройка LMTP в Dovecot
+
+В Postfix переопределяю передачу сообщений через данный unix-сокет:
+
+```
+postconf -e 'mailbox_transport = lmtp:unix:private/dovecot-lmtp'
+```
+
+В файле ```/etc/dovecot/conf.d/10-auth.conf``` задаю формат имени пользователя:
+
+```conf
+auth_username_format = %Ln
+```
+
+## Настройка LMTP в Dovecot
+
+![Настройка LMTP](image/2.png){#fig-002 width=70%}
+
+## Настройка SMTP-аутентификации
+
+В файле ```/etc/dovecot/conf.d/10-master.conf``` определил службу аутентификации пользователей:
+
+```conf
+service auth {
+  unix_listener /var/spool/postfix/private/auth {
+    group = postfix
+    user = postfix
+    mode = 0660
+  }
+  unix_listener auth-userdb {
+    mode = 0600
+    user = dovecot
+  }
+}
+```
+## Настройка SMTP-аутентификации
+
+Для Postfix задал тип аутентификации SASL для smtpd и соответствующий unix-сокет:
+
+```
+postconf -e 'smtpd_sasl_type = dovecot'
+postconf -e 'smtpd_sasl_path = private/auth'
+```
+
+Настроил Postfix для приёма почты из Интернета только для пользователей сервера или для
+произвольных пользователей локальной машины:
+
+```
+postconf -e 'smtpd_recipient_restrictions = \
+    reject_unknown_recipient_domain, permit_mynetworks, \
+    reject_non_fqdn_recipient, reject_unauth_destination, \
+    reject_unverified_recipient, permit'
+```
+
+Ограничил приём почты только локальным адресом SMTP-сервера сети:
+
+```
+postconf -e 'mynetworks = 127.0.0.0/8'
+```
+
+## Настройка SMTP-аутентификации
+
+Запустил SMTP-сервер с возможностью аутентификации.
+Для этого внес изменения в файл ```/etc/postfix/master.cf```:
+
+```conf
+smtp inet n - n - - smtpd
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_recipient_restrictions=reject_non_fqdn_recipient, \
+  reject_unknown_recipient_domain,permit_sasl_authenticated,reject
+```
+
+## Настройка SMTP-аутентификации
+
+![Настройка SMTP](image/3.png){#fig-003 width=70%}
+
+## Проверка SMTP-аутентификации
+
+![Проверка работы SMTP с клиента через telnet](image/4.png){#fig-004 width=70%}
+
+## Настройка SMTP over TLS
+
+Настроил на сервере TLS, скопировав файлы сертификата и ключа Dovecot:
+
+```
+cp /etc/pki/dovecot/certs/dovecot.pem /etc/pki/tls/certs
+cp /etc/pki/dovecot/private/dovecot.pem /etc/pki/tls/private
+```
+
+И сконфигурировав Postfix:
+
+```
+postconf -e 'smtpd_tls_cert_file=/etc/pki/tls/certs/dovecot.pem'
+postconf -e 'smtpd_tls_key_file=/etc/pki/tls/private/dovecot.pem'
+postconf -e 'smtpd_tls_session_cache_database = \
+btree:/var/lib/postfix/smtpd_scache'
+postconf -e 'smtpd_tls_security_level = may'
+postconf -e 'smtp_tls_security_level = may'
+```
+
+## Настройка SMTP over TLS
+
+Вновь изменил запись в ```/etc/postfix/master.cf```:
+
+```conf
+smtp inet n - n - - smtpd
+  -o smtpd_tls_security_level=encrypt
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_recipient_restrictions=reject_non_fqdn_recipient, \
+  reject_unknown_recipient_domain,permit_sasl_authenticated,reject
+```
+
+Добавил ```smtp-submission``` в firewalld:
+
+```
+firewall-cmd --add-service=smtp-submission
+firewall-cmd --add-service=smtp-submission --permanent
+firewall-cmd --reload
+```
+
+![SMTP over TLS](image/5.png){#fig-005 width=70%}
+
+## Фиксация изменений в настройках внутреннего окружения виртуальной машины
+
+Проделываю данные манипуляции в каталоге ```/vagrant/provision/server```
+
+```
+cp -R /etc/dovecot/dovecot.conf /vagrant/provision/server/mail/etc/dovecot/
+cp -R /etc/dovecot/conf.d/10-master.conf /vagrant/provision/server/mail/etc/dovecot/conf.d/
+cp -R /etc/dovecot/conf.d/10-auth.conf /vagrant/provision/server/mail/etc/dovecot/conf.d/
+mkdir -p /vagrant/provision/server/mail/etc/postfix/
+cp -R /etc/postfix/master.cf /vagrant/provision/server/mail/etc/postfix/
+```
+
+## Фиксация изменений в настройках внутреннего окружения виртуальной машины
+
+Внес изменения в файл ```/vagrant/provision/server/mail.sh```.
+Добавил:
+
+```
+...
+echo "Configure postfix for auth"
+postconf -e 'smtpd_sasl_type = dovecot'
+postconf -e 'smtpd_sasl_path = private/auth'
+postconf -e 'smtpd_recipient_restrictions = 
+reject_unknown_recipient_domain, permit_mynetworks, 
+reject_non_fqdn_recipient, reject_unauth_destination, 
+reject_unverified_recipient, permit'
+...
+echo "Configure postfix for SMTP over TLS"
+cp /etc/pki/dovecot/certs/dovecot.pem /etc/pki/tls/certs
+cp /etc/pki/dovecot/private/dovecot.pem /etc/pki/tls/private
+postconf -e 'smtpd_tls_cert_file=/etc/pki/tls/certs/dovecot.pem'
+postconf -e 'smtpd_tls_key_file=/etc/pki/tls/private/dovecot.pem'
+postconf -e 'smtpd_tls_session_cache_database = 
+btree:/var/lib/postfix/smtpd_scache'
+postconf -e 'smtpd_tls_security_level = may'
+postconf -e 'smtp_tls_security_level = may'
+...
+```
+
 # Результаты
 
-## Получающиеся форматы
-
-- Полученный `pdf`-файл можно демонстрировать в любой программе просмотра `pdf`
-- Полученный `html`-файл содержит в себе все ресурсы: изображения, css, скрипты
-
-# Элементы презентации
-
-## Актуальность
-
-- Даёт понять, о чём пойдёт речь
-- Следует широко и кратко описать проблему
-- Мотивировать свое исследование
-- Сформулировать цели и задачи
-- Возможна формулировка ожидаемых результатов
-
-## Цели и задачи
-
-- Не формулируйте более 1--2 целей исследования
-
-## Материалы и методы
-
-- Представляйте данные качественно
-- Количественно, только если крайне необходимо
-- Излишние детали не нужны
-
-## Содержание исследования
-
-- Предлагаемое решение задач исследования с обоснованием
-- Основные этапы работы
-
-## Результаты
-
-- Не нужны все результаты
-- Необходимы логические связки между слайдами
-- Необходимо показать понимание материала
-
-
-## Итоговый слайд
-
-- Запоминается последняя фраза. © Штирлиц
-- Главное сообщение, которое вы хотите донести до слушателей
-- Избегайте использовать последний слайд вида *Спасибо за внимание*
-
-# Рекомендую
-
-## Принцип 10/20/30
-
-  - 10 слайдов
-  - 20 минут на доклад
-  - 30 кегль шрифта
-
-## Связь слайдов
-
-::: incremental
-
-- Один слайд --- одна мысль
-- Нельзя ссылаться на объекты, находящиеся на предыдущих слайдах (например, на формулы)
-- Каждый слайд должен иметь заголовок
-
-:::
-
-## Количество сущностей
-
-::: incremental
-
-- Человек может одновременно помнить $7 \pm 2$ элемента
-- При размещении информации на слайде старайтесь чтобы в сумме слайд содержал не более 5 элементов
-- Можно группировать элементы так, чтобы визуально было не более 5 групп
-
-:::
-
-## Общие рекомендации
-
-::: incremental
-
-- На слайд выносится та информация, которая без зрительной опоры воспринимается хуже
-- Слайды должны дополнять или обобщать содержание выступления или его частей, а не дублировать его
-- Информация на слайдах должна быть изложена кратко, чётко и хорошо структурирована
-- Слайд не должен быть перегружен графическими изображениями и текстом
-- Не злоупотребляйте анимацией и переходами
-
-:::
-
-## Представление данных
-
-::: incremental
-
-- Лучше представить в виде схемы
-- Менее оптимально представить в виде рисунка, графика, таблицы
-- Текст используется, если все предыдущие способы отображения информации не подошли
-
-:::
+Я успешно приобрел практические навыки по конфигурированию SMTP-сервера в части
+настройки аутентификации.
