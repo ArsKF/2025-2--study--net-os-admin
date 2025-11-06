@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -13,55 +11,378 @@ author:
       address: ул. Миклухо-Маклая, д. 6
 
 ## Title
-title: "Шаблон отчёта по лабораторной работе"
-subtitle: "Простейший вариант"
+title: "Лабораторная работа №14"
+subtitle: "Настройка файловых служб Samba"
 license: "CC BY"
 ---
 
 # Цель работы
 
-Здесь приводится формулировка цели лабораторной работы.
-Формулировки цели для каждой лабораторной работы приведены в методических указаниях.
-
-Цель данного шаблона --- максимально упростить подготовку отчётов по лабораторным работам.
-Модифицируя данный шаблон, студенты смогут без труда подготовить отчёт по лабораторным работам, а также познакомиться с основными возможностями разметки Markdown.
+Приобрести навыки настройки доступа групп пользователей к общим ресурсам по протоколу SMB.
 
 # Задание
 
-Здесь приводится описание задания в соответствии с рекомендациями методического пособия и выданным вариантом.
+- Установить и настроить сервер Samba
 
-# Теоретическое введение
+- Настроить на клиенте доступ к разделяемым ресурсам
 
-Здесь описываются теоретические аспекты, связанные с выполнением работы.
-
-Например, в [табл. @tbl-std-dir] приведено краткое описание стандартных каталогов Unix.
-
-| Имя каталога | Описание каталога                                                                                                          |
-|--------------|----------------------------------------------------------------------------------------------------------------------------|
-| `/`          | Корневая директория, содержащая всю файловую                                                                               |
-| `/bin `      | Основные системные утилиты, необходимые как в однопользовательском режиме, так и при обычной работе всем пользователям     |
-| `/etc`       | Общесистемные конфигурационные файлы и файлы конфигурации установленных программ                                           |
-| `/home`      | Содержит домашние директории пользователей, которые, в свою очередь, содержат персональные настройки и данные пользователя |
-| `/media`     | Точки монтирования для сменных носителей                                                                                   |
-| `/root`      | Домашняя директория пользователя  `root`                                                                                   |
-| `/tmp`       | Временные файлы                                                                                                            |
-| `/usr`       | Вторичная иерархия для данных пользователя                                                                                 |
-
-: Описание некоторых каталогов файловой системы GNU Linux {#tbl-std-dir}
-
-Более подробно про Unix см. в [@tanenbaum_book_modern-os_ru; @robbins_book_bash_en; @zarrelli_book_mastering-bash_en; @newham_book_learning-bash_en].
+- Написать скрипты для Vagrant, фиксирующие действия по установке и настройке сервера Samba для доступа к разделяемым ресурсам во внутреннем окружении виртуальных машин ```server``` и ```client```. Соответствующим образом внести изменения в Vagrantfile
 
 # Выполнение лабораторной работы
 
-Описываются проведённые действия, в качестве иллюстрации даётся ссылка на иллюстрацию ([рис. @fig-001]).
+## Настройка сервера Samba
 
-![V Сольвеевский конгресс (1927) «Электроны и фотоны»](image/solvay.jpg){#fig-001 width=70%}
+Сначала установил необходимые пакеты:
+
+```
+dnf -y install samba samba-client cifs-utils
+```
+
+После создал группу ```sambagroup``` для пользователей, которые будут работать с Samba-сервером:
+
+```
+groupadd -g 1010 sambagroup
+```
+
+И добавил своего пользователя в эту группу:
+
+```
+usermod -aG sambagroup avagaev
+```
+
+После создал общий каталог в файловой системе Linux:
+
+```
+mkdir -p /srv/sambashare
+```
+
+Изменил конфигурационный файл ```/etc/samba/smb.conf```:
+
+```conf
+[global]
+workgroup = AVAGAEV-NET
+...
+[sambashare]
+comment = My Samba Share
+path = /srv/sambashare
+write list = @sambagroup
+```
+
+После проверил, что не допусил ошибок:
+
+```
+testparm
+```
+
+Наконец, запустил Samba:
+
+```
+systemctl enable smb
+systemctl start smb
+systemctl status smb
+```
+
+![Установка и настройка сервера](image/1.png){#fig-001 width=70%}
+
+Проверил наличие общего доступа (анонимным пользователем):
+
+```
+smbclient -L //server
+```
+
+И после настроил firewalld:
+
+```
+firewall-cmd --add-service=samba
+firewall-cmd --add-service=samba --permanent
+firewall-cmd --reload
+```
+
+Настроил права доступа для каталога:
+
+```
+chgrp sambagroup /srv/sambashare
+chmod g=rwx /srv/sambashare
+```
+
+Настроил контекст безопасности SELinux:
+
+```
+semanage fcontext -a -t samba_share_t "/srv/sambashare(/.*)?"
+restorecon -vR /srv/sambashare
+```
+
+Проверил контекст безопасности:
+
+```
+cd /srv
+ls -Z
+```
+
+После разрешил экспортировать разделяемые ресурсы для чтения и записи:
+
+```
+setsebool samba_export_all_rw 1
+setsebool samba_export_all_rw 1 -P
+```
+
+![Продолжение настройки сервера](image/2.png){#fig-002 width=70%}
+
+Теперь проверил, в какие группы включен мой пользователь:
+
+```
+id
+```
+
+Попробовал создать файл в разделяемом каталоге:
+
+```
+cd /srv/sambashare
+touch avagaev@server.txt
+```
+
+И добавил своего пользователя в базу пользователей Samba
+
+```
+smbpasswd -L -a avagaev
+```
+
+![Настройка пользователя Samba](image/3.png){#fig-003 width=70%}
+
+## Монтирование файловой системы Samba на клиенте
+
+Сначала установил необходимые пакеты:
+
+```
+dnf -y install samba-client cifs-utils
+```
+
+И настроил firewalld:
+
+```
+firewall-cmd --add-service=samba-client
+firewall-cmd --add-service=samba-client --permanent
+firewall-cmd --reload
+```
+
+После создал группу ```sambagroup``` и добавил своего пользователя:
+
+```
+groupadd -g 1010 sambagroup
+usermod -aG sambagroup avagaev
+```
+
+Изменил конфигурационный файл ```/etc/samba/smb.conf```:
+
+```conf
+[global]
+workgroup = AVAGAEV-NET
+```
+
+Попробовал подлючиться к серверу ([рис. @fig-004]):
+
+```
+smbclient -L //server
+```
+
+![Подкючение к Samba с клиента](image/4.png){#fig-004 width=70%}
+
+Вход происходит с текущего пользователя root.
+
+Попробовал подключиться с указанием пользователя ([рис. @fig-005]):
+
+```
+smbclient -L //server
+```
+
+![Подкючение к Samba с клиента с указанием пользователя](image/5.png){#fig-005 width=70%}
+
+Вход происходит с указаного пользователя.
+
+Теперь на клиенте создал точку монтирования:
+
+```
+mkdir /mnt/samba
+```
+
+Получил доступ к общему ресурсу с помощью mount:
+
+```
+mount -o username=avagaev,user,rw,uid=avagaev,gid=sambagroup \
+    //server/sambashare /mnt/samba
+```
+
+Попробовал записать файл в данный каталог:
+
+```
+cd /mnt/samba
+touch avagaev@client.txt
+```
+
+![Взаимодействие с каталогом пользователя](image/6.png){#fig-006 width=70%}
+
+Отмонтировал каталог:
+
+```
+umount /mnt/samba
+```
+
+И настроил работу с Samba с помощью файла учётных данных.
+
+Для этого создал файл ```smbusers``` в каталоге ```/etc/samba/```:
+
+```
+touch /etc/samba/smbusers
+chmod 600 /etc/samba/smbusers
+```
+
+В который записал данные от аккаунта:
+
+```conf
+username=avagaev
+password=Street200!
+```
+
+Также в файл ```/etc/fstab``` добавил строку:
+
+```conf
+//server/sambashare /mnt/samba cifs \
+user,rw,uid=avagaev,gid=sambagroup,credentials=/etc/samba/smbusers,_netdev 0 0
+```
+
+И снова попробовал подмонтировать ресурс:
+
+![Взаимодействие с каталогом пользователя через файл учётных данных](image/7.png){#fig-007 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant/provision/server
+
+mkdir -p /vagrant/provision/server/smb/etc/samba
+cp -R /etc/samba/smb.conf /vagrant/provision/server/smb/etc/samba/
+
+touch smb.sh
+chmod +x smb.sh
+```
+
+В файл ```/vagrant/provision/server/smb.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+LOGIN=avagaev
+PASS=Street200!
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install samba samba-client cifs-utils
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/smb/etc/* /etc
+chown -R root:root /etc/samba/*
+restorecon -vR /etc
+
+echo "Configure firewall"
+firewall-cmd --add-service samba --permanent
+firewall-cmd --reload
+
+echo "Users and groups"
+groupadd -g 1010 sambagroup
+usermod -aG sambagroup $LOGIN
+echo -ne "$PASS\n$PASS\n" | smbpasswd -L -a -s $LOGIN
+
+echo "Make share dir"
+mkdir -p /srv/sambashare
+chgrp sambagroup /srv/sambashare
+chmod g=rwx /srv/sambashare
+
+echo "Tuning SELinux"
+semanage fcontext -a -t samba_share_t "/srv/sambashare(/.*)?"
+
+setsebool samba_export_all_rw 1
+setsebool samba_export_all_rw 1 -P
+
+restorecon -vR /srv/sambashare
+
+echo "Start smb service"
+systemctl enable smb
+systemctl start smb
+
+systemctl restart firewalld
+```
+
+Аналогично для ВМ ```client```:
+
+```
+cd /vagrant/provision/client
+
+mkdir -p /vagrant/provision/client/smb/etc/samba
+cp -R /etc/samba/smb.conf /vagrant/provision/client/smb/etc/samba/
+cp -R /etc/samba/smbusers /vagrant/provision/client/smb/etc/samba/
+
+touch smb.sh
+chmod +x smb.sh
+```
+
+В файл ```/vagrant/provision/client/smb.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+LOGIN=avagaev
+
+echo "Provisioning script $0"
+
+mkdir -p /mnt/samba
+
+echo "Install needed packages"
+dnf -y install samba-client cifs-utils
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/client/smb/etc/* /etc
+chown -R root:root /etc/samba/*
+restorecon -vR /etc
+
+echo "Configure firewall"
+firewall-cmd --add-service samba-client --permanent
+firewall-cmd --reload
+
+echo "Users and groups"
+groupadd -g 1010 sambagroup
+usermod -aG sambagroup $LOGIN
+
+echo "Mounting dirs"
+mkdir -p /srv/sambashare
+echo "//server/sambashare /mnt/samba cifs \
+user,rw,credentials=/etc/samba/smbusers,uid=user, \
+gid=sambagroup,_netdev 0 0" >> /etc/fstab
+
+restorecon -vR /etc
+
+umount /mnt/samba
+mount /mnt/samba
+```
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующие секции:
+
+```conf
+server.vm.provision "SMB server",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/smb.sh"
+...
+client.vm.provision "SMB client",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/client/smb.sh"
+```
 
 # Выводы
 
-Здесь кратко описываются итоги проделанной работы.
+Я приобрёл навыки настройки доступа групп пользователей к общим ресурсам по протоколу SMB.
 
-# Список литературы{.unnumbered}
-
-::: {#refs}
-:::
