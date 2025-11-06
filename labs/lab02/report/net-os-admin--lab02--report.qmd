@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -13,55 +11,364 @@ author:
       address: ул. Миклухо-Маклая, д. 6
 
 ## Title
-title: "Шаблон отчёта по лабораторной работе"
-subtitle: "Простейший вариант"
+title: "Лабораторная работа №2"
+subtitle: "Настройка DNS-сервера"
 license: "CC BY"
 ---
 
 # Цель работы
 
-Здесь приводится формулировка цели лабораторной работы.
-Формулировки цели для каждой лабораторной работы приведены в методических указаниях.
-
-Цель данного шаблона --- максимально упростить подготовку отчётов по лабораторным работам.
-Модифицируя данный шаблон, студенты смогут без труда подготовить отчёт по лабораторным работам, а также познакомиться с основными возможностями разметки Markdown.
+Приобрести практические навыки по установке и конфигурированию DNS-сервера, усвоить принципы работы системы доменных имён.
 
 # Задание
 
-Здесь приводится описание задания в соответствии с рекомендациями методического пособия и выданным вариантом.
+- Установить на виртуальной машине ```server``` DNS-сервер bind и bind-utils
 
-# Теоретическое введение
+- Сконфигурировать на виртуальной машине ```server``` кэширующий DNS-сервер
 
-Здесь описываются теоретические аспекты, связанные с выполнением работы.
+- Сконфигурировать на виртуальной машине ```server``` первичный DNS-сервер
 
-Например, в [табл. @tbl-std-dir] приведено краткое описание стандартных каталогов Unix.
+- При помощи утилит dig и host проанализировать работу DNS-сервера
 
-| Имя каталога | Описание каталога                                                                                                          |
-|--------------|----------------------------------------------------------------------------------------------------------------------------|
-| `/`          | Корневая директория, содержащая всю файловую                                                                               |
-| `/bin `      | Основные системные утилиты, необходимые как в однопользовательском режиме, так и при обычной работе всем пользователям     |
-| `/etc`       | Общесистемные конфигурационные файлы и файлы конфигурации установленных программ                                           |
-| `/home`      | Содержит домашние директории пользователей, которые, в свою очередь, содержат персональные настройки и данные пользователя |
-| `/media`     | Точки монтирования для сменных носителей                                                                                   |
-| `/root`      | Домашняя директория пользователя  `root`                                                                                   |
-| `/tmp`       | Временные файлы                                                                                                            |
-| `/usr`       | Вторичная иерархия для данных пользователя                                                                                 |
-
-: Описание некоторых каталогов файловой системы GNU Linux {#tbl-std-dir}
-
-Более подробно про Unix см. в [@tanenbaum_book_modern-os_ru; @robbins_book_bash_en; @zarrelli_book_mastering-bash_en; @newham_book_learning-bash_en].
+- Написать скрипт для Vagrant, фиксирующий проделанную работу по установке и конфигурированию DNS-сервера
 
 # Выполнение лабораторной работы
 
-Описываются проведённые действия, в качестве иллюстрации даётся ссылка на иллюстрацию ([рис. @fig-001]).
+## Установка DNS-сервера
 
-![V Сольвеевский конгресс (1927) «Электроны и фотоны»](image/solvay.jpg){#fig-001 width=70%}
+Сначала установил bind и bind-utils:
+
+```
+dnf -y install bind bind-utils
+```
+
+Сделал запрос к DNS-адресу ```www.yandex.ru``` ([рис. @fig-001]):
+
+![Запрос к DNS-адресу Яндекса](image/1.png){#fig-001 width=70%}
+
+Здесь:
+
+- DiG 9.18.33 - версия утилиты.
+
+- global options: +cmd - использовались только стандартные опции без дополнительных флагов.
+
+- opcode: QUERY - выполнялся стандартный DNS-запрос.
+
+- status: NOERROR - ошибок нет, домен успешно найден.
+
+- id: 25536 - идентификатор запроса.
+
+- flags: qr - это ответ; rd - запрошено рекурсивное разрешение; ra - сервер поддерживает рекурсию.
+
+- QUERY: 1 - один запрос.
+
+- ANSWER: 3 - три ответа.
+
+- AUTHORITY: 0 - нет данных об авторитетных серверах в этом ответе.
+
+- ADDITIONAL: 1 - есть одно дополнительное поле.
+
+- version: 0 - текущая версия EDNS.
+
+- udp: 1232 - максимальный размер UDP-пакета, поддерживаемый клиентом.
+
+- QUESTION SECTION - запрос клиента: Домен: www.yandex.ru; Класс: IN (Internet); Тип записи: A.
+
+- ANSWER SECTION - DNS-сервер вернул A-записи.
+
+- Query time: 0 msec - время выполнения запроса.
+
+- SERVER: 10.0.2.3#53 - адрес DNS-сервера, который дал ответ.
+
+- WHEN: — дата и время выполнения запроса.
+
+- MSG SIZE rcvd: 90 — размер полученного DNS-сообщения.
+
+## Конфигурирование кэширующего DNS-сервера
+
+Запустил DNS-сервер:
+
+```
+systemctl enable named
+systemctl start named
+```
+
+Выполнил DNS-запрос через локальный сервер:
+
+```
+dig @127.0.0.1 www.yandex.ru
+```
+
+![Запрос к DNS-адресу Яндекса через локальный DNS-сервер](image/2.png){#fig-002 width=70%}
+
+Отличия от предыдущего запроса:
+
+- Прямой запрос к новому DNS-серверу закончился ошибкой (SERVFAIL) - сервер не отвечает
+
+После я назначил его сервером по умолчанию для хоста и внутренней виртуальной сети:
+
+```
+nmcli connection edit eth0
+remove ipv4.dns
+set ipv4.ignore-auto-dns yes
+set ipv4.dns 127.0.0.1
+save
+quit
+```
+
+Соединение ```System eth0``` не было обнаружено.
+
+Перезапустил NetworkManager:
+
+```
+systemctl restart NetworkManager
+```
+
+После внес изменения в конфигурационный файл ```/etc/named.conf```:
+
+```conf
+...
+listen-on port 53 { 127.0.0.1; any; };
+...
+allow-query	{ localhost; 192.168.0.0/16; };
+```
+
+Внес изменения в firewalld:
+
+```
+firewall-cmd --add-service=dns
+firewall-cmd --add-service=dns --permanent
+```
+
+Проверил, что сервер слушает 53 порт:
+
+```
+lsof | grep UDP
+```
+
+![Проверка портов DNS-сервера](image/3.png){#fig-003 width=70%}
+
+Также добавил перенаправление DNS-запросов к вышестоящему серверу, добавив строку в ```/etc/named.conf```:
+
+```conf
+forwarders { 1.1.1.1; 8.8.8.8; };
+forward first;
+```
+
+## Конфигурирование первичного DNS-сервера
+
+Вначале я скопировал шаблон описания DNS-зон и переименовал его:
+
+```
+cp /etc/named.rfc1912.zones /etc/named/
+cd /etc/named
+mv /etc/named/named.rfc1912.zones /etc/named/avagaev.net
+```
+
+Включил данный файл в конфигурационный файл ```/etc/named.conf```:
+
+```conf
+include "/etc/named/avagaev.net";
+```
+
+Затем начал редактирование данного файла:
+
+```conf
+...
+zone "avagaev.net" IN {
+      type master;
+      file "master/fz/avagaev.net";
+      allow-update { none; };
+};
+...
+zone "1.168.192.in-addr.arpa" IN {
+      type master;
+      file "master/rz/192.168.1";
+      allow-update { none; };
+};
+```
+
+В каталоге ```/var/named``` создал соответствующие подкаталоги для файлов прямой и обратной зоны:
+
+```
+cd /var/named
+mkdir -p /var/named/master/fz
+mkdir -p /var/named/master/rz
+```
+
+Сами файлы скопировал с шаблонов:
+
+```
+cp /var/named/named.localhost /var/named/master/fz/
+cd /var/named/master/fz/
+mv named.localhost avagaev.net
+
+cp /var/named/named.loopback /var/named/master/rz/
+cd /var/named/master/rz/
+mv named.loopback 192.168.1
+```
+
+Отредактировал файл ```/var/named/master/fz/avagaev.net```:
+
+```conf
+$TTL 1D
+@                       IN SOA  @ server.avagaev.net. (
+                                2025102601 ; serial
+                                86400      ; refresh
+                                3600       ; retry
+                                604800     ; expire
+                                10800      ; minimum
+                                )
+                        NS      @
+                        A       192.168.1.1
+$ORIGIN avagaev.net.
+ns                      A       192.168.1.1
+server                  A       192.168.1.1
+```
+
+Отредактировал файл ```/var/named/master/rz/192.168.1```:
+
+```conf
+$TTL 1D
+@                       IN SOA  @ server.avagaev.net. (
+                                2025102601 ; serial
+                                86400      ; refresh
+                                3600       ; retry
+                                604800     ; expire
+                                10800      ; minimum
+                                )
+                        NS      @
+                        A       192.168.1.1
+                        PTR     server.avagaev.net.
+$ORIGIN 1.168.192.in-addr.arpa.
+1                       PTR     server.avagaev.net.
+1                       PTR     ns.avagaev.net.
+```
+
+Далее исправил права доступа к каталогам и восстановил метки SELinux:
+
+```
+chown -R named:named /etc/named
+chown -R named:named /var/named
+
+restorecon -vR /etc
+restorecon -vR /var/named
+```
+
+Проверил состояния переключателей SELinux:
+
+```
+getsebool -a | grep named
+```
+
+![Настройка DNS-сервера](image/4.png){#fig-004 width=70%}
+
+В дополнительном терминале запустил расщиренный лог системных сообщений:
+
+```
+journalctl -x -f
+```
+
+И перезапустил DNS-сервер:
+
+```
+systemctl restart named
+```
+
+![Мониторинг запуска DNS-сервера](image/5.png){#fig-005 width=70%}
+
+## Анализ работы DNS-сервера
+
+Получил описание DNS-зоны с сервера:
+
+```
+dig ns.avagaev.net
+```
+
+Проанализировал корректность работы DNS-сервера:
+
+```
+host -l avagaev.net
+host -a avagaev.net
+host -t A avagaev.net
+host -t PTR 192.168.1.1
+```
+
+![Проверка работы DNS-сервера](image/6.png){#fig-006 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant
+
+mkdir -p /vagrant/provision/server/dns/etc/named
+mkdir -p /vagrant/provision/server/dns/var/named/master
+
+cp -R /etc/named.conf /vagrant/provision/server/dns/etc/
+cp -R /etc/named/* /vagrant/provision/server/dns/etc/named/
+cp -R /var/named/master/* \
+   /vagrant/provision/server/dns/var/named/master/
+
+touch dns.sh
+chmod +x dns.sh
+```
+
+В файл ```/vagrant/provision/server/dns.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install bind bind-utils
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/dns/etc/* /etc
+cp -R /vagrant/provision/server/dns/var/named/* /var/named
+
+chown -R named:named /etc/named
+chown -R named:named /var/named
+
+restorecon -vR /etc
+restorecon -vR /var/named
+
+echo "Configure firewall"
+firewall-cmd --add-service=dns
+firewall-cmd --add-service=dns --permanent
+
+echo "Tuning SELinux"
+setsebool named_write_master_zones 1
+setsebool -P named_write_master_zones 1
+
+echo "Change dns server address"
+nmcli connection edit "eth0" <<EOF
+remove ipv4.dns
+set ipv4.ignore-auto-dns yes
+set ipv4.dns 127.0.0.1
+save
+quit
+EOF
+systemctl restart NetworkManager
+
+echo "Start named service"
+systemctl enable named
+systemctl start named
+```
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующую секцию:
+
+```conf
+server.vm.provision "server dns",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/dns.sh"
+```
 
 # Выводы
 
-Здесь кратко описываются итоги проделанной работы.
+Я приобрёл практические навыки по установке и конфигурированию DNS-сервера и усвоил принципы работы системы доменных имён.
 
-# Список литературы{.unnumbered}
-
-::: {#refs}
-:::
