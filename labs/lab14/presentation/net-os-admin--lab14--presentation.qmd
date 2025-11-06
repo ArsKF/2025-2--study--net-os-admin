@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -12,13 +10,12 @@ author:
       city: Москва
       address: ул. Миклухо-Маклая, д. 6
 ## Title
-title: Структура научной презентации
-subtitle: Простейший вариант
+title: Лабораторная работа №14
+subtitle: Настройка файловых служб Samba
 license: CC BY
 date: today
 date-format: "YYYY-MM-DD" # Example: 2025-09-06
 ---
-
 # Информация
 
 ## Докладчик
@@ -26,175 +23,410 @@ date-format: "YYYY-MM-DD" # Example: 2025-09-06
 :::::::::::::: {.columns align=center}
 ::: {.column width="70%"}
 
-  * Кулябов Дмитрий Сергеевич
-  * д.ф.-м.н., профессор
-  * профессор кафедры теории вероятностей и кибербезопасности
+  * Арсений Валерьевич Агаев
+  * студент
   * Российский университет дружбы народов им. П. Лумумбы
-  * [kulyabov-ds@rudn.ru](mailto:kulyabov-ds@rudn.ru)
-  * <https://yamadharma.github.io/ru/>
+  * [1032221668@rudn.ru](mailto:1032221668@rudn.ru)
 
 :::
 ::: {.column width="30%"}
 
-![](./image/kulyabov.jpg)
-
 :::
 ::::::::::::::
 
-# Вводная часть
+# Цели и задачи
 
-## Актуальность
+Приобрести навыки настройки доступа групп пользователей к общим ресурсам по протоколу SMB.
 
-- Важно донести результаты своих исследований до окружающих
-- Научная презентация --- рабочий инструмент исследователя
-- Необходимо создавать презентацию быстро
-- Желательна минимизация усилий для создания презентации
+- Установить и настроить сервер Samba
 
-## Объект и предмет исследования
+- Настроить на клиенте доступ к разделяемым ресурсам
 
-- Презентация как текст
-- Программное обеспечение для создания презентаций
-- Входные и выходные форматы презентаций
+- Написать скрипты для Vagrant, фиксирующие выполненые действия работы
 
-## Цели и задачи
+# Содержание исследования
 
-- Создать шаблон презентации в Markdown
-- Описать алгоритм создания выходных форматов презентаций
+## Настройка сервера Samba
 
-## Материалы и методы
+Сначала установил необходимые пакеты:
 
-- Процессор `pandoc` для входного формата Markdown
-- Результирующие форматы
-	- `pdf`
-	- `html`
-- Автоматизация процесса создания: `Makefile`
-
-# Создание презентации
-
-## Процессор `pandoc`
-
-- Pandoc: преобразователь текстовых файлов
-- Сайт: <https://pandoc.org/>
-- Репозиторий: <https://github.com/jgm/pandoc>
-
-## Формат `pdf`
-
-- Использование LaTeX
-- Пакет для презентации: [beamer](https://ctan.org/pkg/beamer)
-- Тема оформления: `metropolis`
-
-## Код для формата `pdf`
-
-```yaml
-slide_level: 2
-aspectratio: 169
-section-titles: true
-theme: metropolis
+```
+dnf -y install samba samba-client cifs-utils
 ```
 
-## Формат `html`
+После создал группу ```sambagroup``` для пользователей, которые будут работать с Samba-сервером:
 
-- Используется фреймворк [reveal.js](https://revealjs.com/)
-- Используется [тема](https://revealjs.com/themes/) `beige`
-
-## Код для формата `html`
-
-- Тема задаётся в файле `Makefile`
-
-```make
-REVEALJS_THEME = beige
 ```
+groupadd -g 1010 sambagroup
+```
+
+И добавил своего пользователя в эту группу:
+
+```
+usermod -aG sambagroup avagaev
+```
+
+После создал общий каталог в файловой системе Linux:
+
+```
+mkdir -p /srv/sambashare
+```
+
+## Настройка сервера Samba
+
+Изменил конфигурационный файл ```/etc/samba/smb.conf```:
+
+```conf
+[global]
+workgroup = AVAGAEV-NET
+...
+[sambashare]
+comment = My Samba Share
+path = /srv/sambashare
+write list = @sambagroup
+```
+
+После проверил, что не допусил ошибок:
+
+```
+testparm
+```
+
+Наконец, запустил Samba:
+
+```
+systemctl enable smb
+systemctl start smb
+systemctl status smb
+```
+
+## Настройка сервера Samba
+
+![Установка и настройка сервера](image/1.png){#fig-001 width=70%}
+
+## Настройка сервера Samba
+
+Проверил наличие общего доступа (анонимным пользователем):
+
+```
+smbclient -L //server
+```
+
+И после настроил firewalld:
+
+```
+firewall-cmd --add-service=samba
+firewall-cmd --add-service=samba --permanent
+firewall-cmd --reload
+```
+
+Настроил права доступа для каталога:
+
+```
+chgrp sambagroup /srv/sambashare
+chmod g=rwx /srv/sambashare
+```
+
+## Настройка сервера Samba
+
+Настроил контекст безопасности SELinux:
+
+```
+semanage fcontext -a -t samba_share_t "/srv/sambashare(/.*)?"
+restorecon -vR /srv/sambashare
+```
+
+Проверил контекст безопасности:
+
+```
+cd /srv
+ls -Z
+```
+
+После разрешил экспортировать разделяемые ресурсы для чтения и записи:
+
+```
+setsebool samba_export_all_rw 1
+setsebool samba_export_all_rw 1 -P
+```
+
+## Настройка сервера Samba
+
+![Продолжение настройки сервера](image/2.png){#fig-002 width=70%}
+
+## Настройка сервера Samba
+
+Теперь проверил, в какие группы включен мой пользователь:
+
+```
+id
+```
+
+Попробовал создать файл в разделяемом каталоге:
+
+```
+cd /srv/sambashare
+touch avagaev@server.txt
+```
+
+И добавил своего пользователя в базу пользователей Samba
+
+```
+smbpasswd -L -a avagaev
+```
+
+## Настройка сервера Samba
+
+![Настройка пользователя Samba](image/3.png){#fig-003 width=70%}
+
+## Монтирование файловой системы Samba на клиенте
+
+Сначала установил необходимые пакеты:
+
+```
+dnf -y install samba-client cifs-utils
+```
+
+И настроил firewalld:
+
+```
+firewall-cmd --add-service=samba-client
+firewall-cmd --add-service=samba-client --permanent
+firewall-cmd --reload
+```
+
+После создал группу ```sambagroup``` и добавил своего пользователя:
+
+```
+groupadd -g 1010 sambagroup
+usermod -aG sambagroup avagaev
+```
+
+Изменил конфигурационный файл ```/etc/samba/smb.conf```:
+
+```conf
+[global]
+workgroup = AVAGAEV-NET
+```
+
+## Монтирование файловой системы Samba на клиенте
+
+Попробовал подлючиться к серверу:
+
+```
+smbclient -L //server
+```
+
+![Подкючение к Samba с клиента](image/4.png){#fig-004 width=70%}
+
+## Монтирование файловой системы Samba на клиенте
+
+Попробовал подключиться с указанием пользователя:
+
+```
+smbclient -L //server
+```
+
+![Подкючение к Samba с клиента с указанием пользователя](image/5.png){#fig-005 width=70%}
+
+## Монтирование файловой системы Samba на клиенте
+
+Теперь на клиенте создал точку монтирования:
+
+```
+mkdir /mnt/samba
+```
+
+Получил доступ к общему ресурсу с помощью mount:
+
+```
+mount -o username=avagaev,user,rw,uid=avagaev,gid=sambagroup //server/sambashare /mnt/samba
+```
+
+Попробовал записать файл в данный каталог:
+
+```
+cd /mnt/samba
+touch avagaev@client.txt
+```
+
+## Монтирование файловой системы Samba на клиенте
+
+![Взаимодействие с каталогом пользователя](image/6.png){#fig-006 width=70%}
+
+## Монтирование файловой системы Samba на клиенте
+
+Отмонтировал каталог:
+
+```
+umount /mnt/samba
+```
+
+И настроил работу с Samba с помощью файла учётных данных.
+
+Для этого создал файл ```smbusers``` в каталоге ```/etc/samba/```:
+
+```
+touch /etc/samba/smbusers
+chmod 600 /etc/samba/smbusers
+```
+
+В который записал данные от аккаунта:
+
+```conf
+username=avagaev
+password=Street200!
+```
+
+Также в файл ```/etc/fstab``` добавил строку:
+
+```conf
+//server/sambashare /mnt/samba cifs \
+user,rw,uid=avagaev,gid=sambagroup,credentials=/etc/samba/smbusers,_netdev 0 0
+```
+
+## Монтирование файловой системы Samba на клиенте
+
+И снова попробовал подмонтировать ресурс:
+
+![Взаимодействие с каталогом пользователя через файл учётных данных](image/7.png){#fig-007 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant/provision/server
+
+mkdir -p /vagrant/provision/server/smb/etc/samba
+cp -R /etc/samba/smb.conf /vagrant/provision/server/smb/etc/samba/
+
+touch smb.sh
+chmod +x smb.sh
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+В файл ```/vagrant/provision/server/smb.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+LOGIN=avagaev
+PASS=Street200!
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install samba samba-client cifs-utils
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/smb/etc/* /etc
+chown -R root:root /etc/samba/*
+restorecon -vR /etc
+
+echo "Configure firewall"
+firewall-cmd --add-service samba --permanent
+firewall-cmd --reload
+
+echo "Users and groups"
+groupadd -g 1010 sambagroup
+usermod -aG sambagroup $LOGIN
+echo -ne "$PASS\n$PASS\n" | smbpasswd -L -a -s $LOGIN
+
+echo "Make share dir"
+mkdir -p /srv/sambashare
+chgrp sambagroup /srv/sambashare
+chmod g=rwx /srv/sambashare
+
+echo "Tuning SELinux"
+semanage fcontext -a -t samba_share_t "/srv/sambashare(/.*)?"
+
+setsebool samba_export_all_rw 1
+setsebool samba_export_all_rw 1 -P
+
+restorecon -vR /srv/sambashare
+
+echo "Start smb service"
+systemctl enable smb
+systemctl start smb
+
+systemctl restart firewalld
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+Аналогично для ВМ ```client```:
+
+```
+cd /vagrant/provision/client
+
+mkdir -p /vagrant/provision/client/smb/etc/samba
+cp -R /etc/samba/smb.conf /vagrant/provision/client/smb/etc/samba/
+cp -R /etc/samba/smbusers /vagrant/provision/client/smb/etc/samba/
+
+touch smb.sh
+chmod +x smb.sh
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+В файл ```/vagrant/provision/client/smb.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+LOGIN=avagaev
+
+echo "Provisioning script $0"
+
+mkdir -p /mnt/samba
+
+echo "Install needed packages"
+dnf -y install samba-client cifs-utils
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/client/smb/etc/* /etc
+chown -R root:root /etc/samba/*
+restorecon -vR /etc
+
+echo "Configure firewall"
+firewall-cmd --add-service samba-client --permanent
+firewall-cmd --reload
+
+echo "Users and groups"
+groupadd -g 1010 sambagroup
+usermod -aG sambagroup $LOGIN
+
+echo "Mounting dirs"
+mkdir -p /srv/sambashare
+echo "//server/sambashare /mnt/samba cifs \
+user,rw,credentials=/etc/samba/smbusers,uid=user, \
+gid=sambagroup,_netdev 0 0" >> /etc/fstab
+
+restorecon -vR /etc
+
+umount /mnt/samba
+mount /mnt/samba
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующие секции:
+
+```conf
+server.vm.provision "SMB server",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/smb.sh"
+...
+client.vm.provision "SMB client",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/client/smb.sh"
+```
+
 # Результаты
 
-## Получающиеся форматы
-
-- Полученный `pdf`-файл можно демонстрировать в любой программе просмотра `pdf`
-- Полученный `html`-файл содержит в себе все ресурсы: изображения, css, скрипты
-
-# Элементы презентации
-
-## Актуальность
-
-- Даёт понять, о чём пойдёт речь
-- Следует широко и кратко описать проблему
-- Мотивировать свое исследование
-- Сформулировать цели и задачи
-- Возможна формулировка ожидаемых результатов
-
-## Цели и задачи
-
-- Не формулируйте более 1--2 целей исследования
-
-## Материалы и методы
-
-- Представляйте данные качественно
-- Количественно, только если крайне необходимо
-- Излишние детали не нужны
-
-## Содержание исследования
-
-- Предлагаемое решение задач исследования с обоснованием
-- Основные этапы работы
-
-## Результаты
-
-- Не нужны все результаты
-- Необходимы логические связки между слайдами
-- Необходимо показать понимание материала
-
-
-## Итоговый слайд
-
-- Запоминается последняя фраза. © Штирлиц
-- Главное сообщение, которое вы хотите донести до слушателей
-- Избегайте использовать последний слайд вида *Спасибо за внимание*
-
-# Рекомендую
-
-## Принцип 10/20/30
-
-  - 10 слайдов
-  - 20 минут на доклад
-  - 30 кегль шрифта
-
-## Связь слайдов
-
-::: incremental
-
-- Один слайд --- одна мысль
-- Нельзя ссылаться на объекты, находящиеся на предыдущих слайдах (например, на формулы)
-- Каждый слайд должен иметь заголовок
-
-:::
-
-## Количество сущностей
-
-::: incremental
-
-- Человек может одновременно помнить $7 \pm 2$ элемента
-- При размещении информации на слайде старайтесь чтобы в сумме слайд содержал не более 5 элементов
-- Можно группировать элементы так, чтобы визуально было не более 5 групп
-
-:::
-
-## Общие рекомендации
-
-::: incremental
-
-- На слайд выносится та информация, которая без зрительной опоры воспринимается хуже
-- Слайды должны дополнять или обобщать содержание выступления или его частей, а не дублировать его
-- Информация на слайдах должна быть изложена кратко, чётко и хорошо структурирована
-- Слайд не должен быть перегружен графическими изображениями и текстом
-- Не злоупотребляйте анимацией и переходами
-
-:::
-
-## Представление данных
-
-::: incremental
-
-- Лучше представить в виде схемы
-- Менее оптимально представить в виде рисунка, графика, таблицы
-- Текст используется, если все предыдущие способы отображения информации не подошли
-
-:::
+Я  успешно приобрёл навыки настройки доступа групп пользователей к общим ресурсам по протоколу SMB.
