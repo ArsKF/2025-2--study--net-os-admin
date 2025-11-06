@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -13,55 +11,180 @@ author:
       address: ул. Миклухо-Маклая, д. 6
 
 ## Title
-title: "Шаблон отчёта по лабораторной работе"
-subtitle: "Простейший вариант"
+title: "Лабораторная работа №15"
+subtitle: "Настройка сетевого журналирования"
 license: "CC BY"
 ---
 
 # Цель работы
 
-Здесь приводится формулировка цели лабораторной работы.
-Формулировки цели для каждой лабораторной работы приведены в методических указаниях.
-
-Цель данного шаблона --- максимально упростить подготовку отчётов по лабораторным работам.
-Модифицируя данный шаблон, студенты смогут без труда подготовить отчёт по лабораторным работам, а также познакомиться с основными возможностями разметки Markdown.
+Получить навыки по работе с журналами системных событий.
 
 # Задание
 
-Здесь приводится описание задания в соответствии с рекомендациями методического пособия и выданным вариантом.
+- Настроить сервер сетевого журналирования событий
 
-# Теоретическое введение
+- Настроить клиент для передачи системных сообщений в сетевой журнал на сервере
 
-Здесь описываются теоретические аспекты, связанные с выполнением работы.
+- Просмотреть журналы системных событий с помощью нескольких программ
 
-Например, в [табл. @tbl-std-dir] приведено краткое описание стандартных каталогов Unix.
-
-| Имя каталога | Описание каталога                                                                                                          |
-|--------------|----------------------------------------------------------------------------------------------------------------------------|
-| `/`          | Корневая директория, содержащая всю файловую                                                                               |
-| `/bin `      | Основные системные утилиты, необходимые как в однопользовательском режиме, так и при обычной работе всем пользователям     |
-| `/etc`       | Общесистемные конфигурационные файлы и файлы конфигурации установленных программ                                           |
-| `/home`      | Содержит домашние директории пользователей, которые, в свою очередь, содержат персональные настройки и данные пользователя |
-| `/media`     | Точки монтирования для сменных носителей                                                                                   |
-| `/root`      | Домашняя директория пользователя  `root`                                                                                   |
-| `/tmp`       | Временные файлы                                                                                                            |
-| `/usr`       | Вторичная иерархия для данных пользователя                                                                                 |
-
-: Описание некоторых каталогов файловой системы GNU Linux {#tbl-std-dir}
-
-Более подробно про Unix см. в [@tanenbaum_book_modern-os_ru; @robbins_book_bash_en; @zarrelli_book_mastering-bash_en; @newham_book_learning-bash_en].
+- Написать скрипты для Vagrant, фиксирующие действия по установке и настройке сетевого сервера журналирования
 
 # Выполнение лабораторной работы
 
-Описываются проведённые действия, в качестве иллюстрации даётся ссылка на иллюстрацию ([рис. @fig-001]).
+## Настройка сервера сетевого журнала
 
-![V Сольвеевский конгресс (1927) «Электроны и фотоны»](image/solvay.jpg){#fig-001 width=70%}
+На сервере создал файл конфигурации сетевого хранения журналов:
+
+```
+cd /etc/rsyslog.d
+touch netlog-server.conf
+```
+
+Включил приём записей журнала, написав в созданном файле:
+
+```conf
+$ModLoad imtcp
+$InputTCPServerRun 514
+```
+
+После перезапустил службу rsyslog и посмотрел, какие порты с ним связаны:
+
+```
+systemctl restart rsyslog
+
+lsof | grep TCP
+```
+
+![Настройка сетевого журнала на сервере](image/1.png){#fig-001 width=70%}
+
+Также настроил firewalld на 514 порт:
+
+```
+firewall-cmd --add-port=514/tcp
+firewall-cmd --add-port=514/tcp --permanent
+```
+
+## Настройка клиента сетевого журнала
+
+Аналогично, на клиенте создаю файл конфигурации сетевого хранения журналов:
+
+```
+cd /etc/rsyslog.d
+touch netlog-client.conf
+```
+
+В созданном файле записал:
+
+```
+*.* @@server.avagaev.net:514
+```
+
+И перезапустил службу rsyslog
+
+```
+systemclt restart rsyslog
+```
+
+![Настройка сетевого журнала на клиенте](image/2.png){#fig-002 width=70%}
+
+## Просмотр журнала
+
+На сервере посмротрел один из файлов журнала:
+
+```
+tail -f /var/log/messages
+```
+
+![Просмотр журнала через tail](image/3.png){#fig-003 width=70%}
+
+В графической программе ```gnome-system-monitor```:
+
+![Просмотр журнала через gnome-system-monitor](image/4.png){#fig-004 width=70%}
+
+Пакет lnav не был найдет в репозиториях. Его аналогом также является tail.
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant/provision/server
+
+mkdir -p /vagrant/provision/server/netlog/etc/rsyslog.d
+cp -R /etc/rsyslog.d/netlog-server.conf \
+   /vagrant/provision/server/netlog/etc/rsyslog.d
+
+touch netlog.sh
+chmod +x netlog.sh
+```
+
+В файл ```/vagrant/provision/server/netlog.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/netlog/etc/* /etc
+restorecon -vR /etc
+
+echo "Configure firewall"
+firewall-cmd --add-port=514/tcp
+firewall-cmd --add-port=514/tcp --permanent
+
+echo "Start rsyslog service"
+systemctl restart rsyslog
+```
+
+Аналогично для ВМ ```client```:
+
+```
+cd /vagrant/provision/client
+
+mkdir -p /vagrant/provision/client/netlog/etc/rsyslog.d
+cp -R /etc/rsyslog.d/netlog-client.conf \
+    /vagrant/provision/client/netlog/etc/rsyslog.d/
+
+touch netlog.sh
+chmod +x netlog.sh
+```
+
+В файл ```/vagrant/provision/client/netlog.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install lnav
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/client/netlog/etc/* /etc
+restorecon -vR /etc
+
+echo "Start rsyslog service"
+systemctl restart rsyslog
+```
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующие секции:
+
+```conf
+server.vm.provision "server netlog",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/netlog.sh"
+...
+client.vm.provision "client netlog",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/client/netlog.sh"
+```
 
 # Выводы
 
-Здесь кратко описываются итоги проделанной работы.
+Я получил навыки по работе с журналами системных событий.
 
-# Список литературы{.unnumbered}
-
-::: {#refs}
-:::
