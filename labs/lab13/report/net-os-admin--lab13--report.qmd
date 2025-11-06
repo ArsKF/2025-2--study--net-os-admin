@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -13,55 +11,395 @@ author:
       address: ул. Миклухо-Маклая, д. 6
 
 ## Title
-title: "Шаблон отчёта по лабораторной работе"
-subtitle: "Простейший вариант"
+title: "Лабораторная работа №13"
+subtitle: "Настройка NFS"
 license: "CC BY"
 ---
 
 # Цель работы
 
-Здесь приводится формулировка цели лабораторной работы.
-Формулировки цели для каждой лабораторной работы приведены в методических указаниях.
-
-Цель данного шаблона --- максимально упростить подготовку отчётов по лабораторным работам.
-Модифицируя данный шаблон, студенты смогут без труда подготовить отчёт по лабораторным работам, а также познакомиться с основными возможностями разметки Markdown.
+Приобрести навыки настройки сервера NFS для удалённого доступа к ресурсам.
 
 # Задание
 
-Здесь приводится описание задания в соответствии с рекомендациями методического пособия и выданным вариантом.
+- Установить и настроить сервер NFSv4
 
-# Теоретическое введение
+- Подмонтировать удалённый ресурс на клиенте
 
-Здесь описываются теоретические аспекты, связанные с выполнением работы.
+- Подключить каталог с контентом веб-сервера к дереву NFS
 
-Например, в [табл. @tbl-std-dir] приведено краткое описание стандартных каталогов Unix.
-
-| Имя каталога | Описание каталога                                                                                                          |
-|--------------|----------------------------------------------------------------------------------------------------------------------------|
-| `/`          | Корневая директория, содержащая всю файловую                                                                               |
-| `/bin `      | Основные системные утилиты, необходимые как в однопользовательском режиме, так и при обычной работе всем пользователям     |
-| `/etc`       | Общесистемные конфигурационные файлы и файлы конфигурации установленных программ                                           |
-| `/home`      | Содержит домашние директории пользователей, которые, в свою очередь, содержат персональные настройки и данные пользователя |
-| `/media`     | Точки монтирования для сменных носителей                                                                                   |
-| `/root`      | Домашняя директория пользователя  `root`                                                                                   |
-| `/tmp`       | Временные файлы                                                                                                            |
-| `/usr`       | Вторичная иерархия для данных пользователя                                                                                 |
-
-: Описание некоторых каталогов файловой системы GNU Linux {#tbl-std-dir}
-
-Более подробно про Unix см. в [@tanenbaum_book_modern-os_ru; @robbins_book_bash_en; @zarrelli_book_mastering-bash_en; @newham_book_learning-bash_en].
+- Написать скрипты для Vagrant, фиксирующие действия по установке и настройке сервера NFSv4 во внутреннем окружении виртуальных машин ```server``` и ```client```. Соответствующим образом внести изменения в Vagrantfile
 
 # Выполнение лабораторной работы
 
-Описываются проведённые действия, в качестве иллюстрации даётся ссылка на иллюстрацию ([рис. @fig-001]).
+## Настройка сервера NFSv4
 
-![V Сольвеевский конгресс (1927) «Электроны и фотоны»](image/solvay.jpg){#fig-001 width=70%}
+Сначала установил необходимые утилиты:
+
+```
+dnf -y install nfs-utils
+```
+
+После создал каталог, который будет доступен всем пользователем сети:
+
+```
+mkdir -p /srv/nfs
+```
+
+В файле ```/etc/exports``` прописиваю данный каталог только на чтение:
+
+```conf
+/srv/nfs *(ro)
+```
+
+Создаю контекст безопасности NFS для общего каталога:
+
+```
+semanage fcontext -a -t nfs_t "/srv/nfs(/.*)?"
+```
+
+После применяю изменения SELinux:
+
+```
+restorecon -vR /srv/nfs
+```
+
+И запускаю сервер NFS
+
+```
+systemctl enable nfs-server.service
+systemctl start nfs-server.service
+```
+
+Также настраиваю firewalld для работы с сервером:
+
+```
+firewall-cmd --add-service=nfs
+firewall-cmd --add-service=nfs --permanent
+firewall-cmd --reload
+```
+
+![Настройка NFS на сервере](image/1.png){#fig-001 width=70%}
+
+На клиенте также устанливаю утилиту:
+
+```
+dnf -y install nfs-utils
+```
+
+Пробую посмотреть подмонтированный каталог ([рис. @fig-002]):
+
+```
+showmount -e server.avagaev.net
+```
+
+![Попытка работы с каталогом NFS с клиента](image/2.png){#fig-002 width=70%}
+
+Как можно понять из сообщения, каталог недоступен для подключения.
+
+Попробовал остановить межсетевой экран на сервере:
+
+```
+systemctl stop firewalld.service
+```
+
+И вновь попробовал подключиться ([рис. @fig-003]):
+
+```
+showmount -e server.avagaev.net
+```
+
+![Попытка работы с каталогом NFS с клиента без межсетевого экрана](image/3.png){#fig-003 width=70%}
+
+Теперь подключение выполнено успешно.
+
+Обратно запустил межсетевой экран:
+
+```
+systemctl start firewalld.service
+```
+
+Добавил службы ```rpc-bind``` и ```mountd``` в настройки firewalld:
+
+```
+firewall-cmd --add-service=mountd --add-service=rpc-bind
+firewall-cmd --add-service=mountd --add-service=rpc-bind --permanent
+firewall-cmd --reload
+```
+
+И снова попробовал подключиться ([рис. @fig-004]):
+
+```
+showmount -e server.avagaev.net
+```
+
+![Попытка работы с каталогом NFS с клиента с нужными настройками](image/4.png){#fig-004 width=70%}
+
+## Монтирование NFS на клиенте
+
+Создал каталог на клиенте, в который будет монтироваться удалённый ресурс:
+
+```
+mkdir -p /mnt/nfs
+mount server.avagaev.net:/srv/nfs /mnt/nfs
+```
+
+И после проверил, что общий ресурс NFS подключён правильно ([рис. @fig-005]):
+
+```
+mount
+```
+
+![Проверка общего ресурса NFS](image/5.png){#fig-005 width=70%}
+
+Указано много технической информации, такие как:
+
+- Протокол подключения
+
+- Адрес
+
+- Права
+
+- И прочее
+
+Добавил строку в файл ```/etc/fstab```:
+
+```conf
+server.avagaev.net:/srv/nfs /mnt/nfs nfs _netdev 0 0
+```
+
+В данной записи указано:
+
+- Путь к удалённому ресурсу
+
+- Точка монтирования на клиенте
+
+- Тип файловой системы
+
+- Опция монтирования, указывающая, что файловая система зависит от сети
+
+- Указывает, что дамп этой файловой системы не требуется
+
+- Отключение проверки при загрузке fsck
+
+На клиенте проверил автоматическое монтирование удалённых ресурсов при запуске ОС ([рис. @fig-006]):
+
+```
+systemctl status remote-fs.target
+```
+
+![Проверка автоматического монтирования общего ресурса NFS](image/6.png){#fig-006 width=70%}
+
+## Подключение каталогов к дереву NFS
+
+На сервере создал общий каталог, в который будет подмонтирован каталог с контентом веб-сервера, 
+и подмонтировал его. После проверил, что отображается в каталоге ```/srv/nfs```:
+
+```
+mkdir -p /srv/nfs/www
+mount -o bind /var/www/ /srv/nfs/www/
+ls /srv/nfs
+```
+
+![Монтирование контента веб-сервера](image/7.png){#fig-007 width=70%}
+
+На клиенте проверил, что отображается в каталоге ```/mnt/nfs``` ([рис. @fig-008]):
+
+```
+ls /mnt/nfs
+```
+
+![Проверка контента веб-сервера на клиенте](image/8.png){#fig-008 width=70%}
+
+После добавил в ```/etc/exports```:
+
+```conf
+/srv/nfs/www 192.168.0.0/16(rw)
+```
+
+И экспортировал все каталоги, упомянутые в предыдущем файле:
+
+```
+exportfs -r
+```
+
+Снова проверил, что отображается в каталоге ```/mnt/nfs``` ([рис. @fig-009]):
+
+![Вторая проверка контента веб-сервера на клиенте](image/9.png){#fig-009 width=70%}
+
+На сервере добавил в файл ```/etc/fstab```:
+
+```conf
+/var/www /srv/nfs/www none bind 0 0
+```
+
+И повторно экспортировал каталоги:
+
+```
+exportfs -r
+```
+
+Снова проверил, что отображается в каталоге ```/mnt/nfs``` на клиенте ([рис. @fig-010]):
+
+![Третья проверка контента веб-сервера на клиенте](image/10.png){#fig-010 width=70%}
+
+## Подключение каталогов для работы пользователей
+
+На сервере под своим пользователем avagaev создал каталог ```common``` с полными 
+правами доступа только для него, а в нём файл ```avagaev@server.txt```:
+
+```
+mkdir -p -m 700 ~/common
+cd ~/common
+touch avagaev@server.txt
+```
+
+Также создал общий каталог для работы пользователя и подмонтировал ее в NFS:
+
+```
+mkdir -p /srv/nfs/home/avagaev
+mount -o bind /home/avagaev/common /srv/nfs/home/avagaev
+```
+
+![Монтирование каталога пользователя на сервере](image/11.png){#fig-011 width=70%}
+
+На чтение и запись он доступен пользователю и только на чтение всем остальным.
+
+После добавил каталог в файл ```/etc/exports```:
+
+```conf
+/srv/nfs/home/avagaev 192.168.0.0/16(rw)
+```
+
+Добавил строку в ```/etc/fstab```:
+
+```conf
+/home/avagaev/common /srv/nfs/home/avagaev none bind 0 0
+```
+
+И повторно экспортировал каталоги:
+
+```
+exportfs -r
+```
+
+На клиенте проверил каталог ```/mnt/nfs```:
+
+![Проверка каталога NFS на клиенте](image/12.png){#fig-012 width=70%}
+
+На клиенте под своим пользователем в каталоге ```/mnt/nfs/home/avagaev``` 
+создал файл ```avagaev@client.txt```:
+
+```
+cd /mnt/nfs/home/avagaev
+touch avagaev@client.txt
+```
+
+![Работа с каталогом пользователя NFS на клиенте](image/13.png){#fig-013 width=70%}
+
+Под пользователем root получил ошибку прав уже при чтении.
+
+Проверил изменения на сервере:
+
+![Работа с каталогом пользователя NFS на сервере](image/14.png){#fig-014 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant/provision/server
+
+mkdir -p /vagrant/provision/server/nfs/etc
+cp -R /etc/exports /vagrant/provision/server/nfs/etc/
+
+touch nfs.sh
+chmod +x nfs.sh
+```
+
+В файл ```/vagrant/provision/server/nfs.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install nfs-utils
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/nfs/etc/* /etc
+
+restorecon -vR /etc
+
+echo "Configure firewall"
+firewall-cmd --add-service nfs --permanent
+firewall-cmd --add-service mountd --add-service rpc-bind --permanent
+firewall-cmd --reload
+
+echo "Tuning SELinux"
+mkdir -p /srv/nfs
+semanage fcontext -a -t nfs_t "/srv/nfs(/.*)?"
+restorecon -vR /srv/nfs
+
+echo "Mounting dirs"
+mkdir -p /srv/nfs/www
+mount -o bind /var/www /srv/nfs/www
+echo "/var/www /srv/nfs/www none bind 0 0" >> /etc/fstab
+mkdir -p /srv/nfs/home/avagaev
+mkdir -p -m 700 /home/avagaev/common
+chown avagaev:avagaev /home/avagaev/common
+mount -o bind /home/avagaev/common /srv/nfs/home/avagaev
+echo "/home/avagaev/common /srv/nfs/home/avagaev none bind 0 0" >> /etc/fstab
+
+echo "Start nfs service"
+systemctl enable nfs-server
+systemctl start nfs-server
+
+systemctl restart firewalld
+```
+
+Аналогично для ВМ ```client```:
+
+```
+cd /vagrant/provision/client
+touch nfs.sh
+chmod +x nfs.sh
+```
+
+В файл ```/vagrant/provision/client/nfs.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install nfs-utils
+
+echo "Mounting dirs"
+mkdir -p /mnt/nfs
+mount server.avagaev.net:/srv/nfs /mnt/nfs
+echo "server.avagaev.net:/srv/nfs /mnt/nfs nfs _netdev 0 0" >> /etc/fstab
+restorecon -vR /etc
+```
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующие секции:
+
+```conf
+server.vm.provision "server nfs",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/nfs.sh"
+...
+client.vm.provision "client nfs",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/client/nfs.sh"
+```
 
 # Выводы
 
-Здесь кратко описываются итоги проделанной работы.
+Я приобрёл навыки настройки сервера NFS для удалённого доступа к ресурсам.
 
-# Список литературы{.unnumbered}
-
-::: {#refs}
-:::
