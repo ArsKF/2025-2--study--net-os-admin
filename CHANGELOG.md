@@ -1,5 +1,5 @@
-# 1.14.0 (2025-11-06)
+# 1.15.0 (2025-11-06)
 
 ### Features
 
-* **lab14:** finish lab14 ([030cac9](https://github.com/ArsKF/2025-2--study--net-os-admin/commit/030cac9d3ef4ba814623b84b167bbd63d3b0145c))
+* **lab15:** finish lab15 ([22db3d7](https://github.com/ArsKF/2025-2--study--net-os-admin/commit/22db3d7543ca3f14a4fdc58445029b65d20b1d54))
