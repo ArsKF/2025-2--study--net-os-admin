@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -13,55 +11,238 @@ author:
       address: ул. Миклухо-Маклая, д. 6
 
 ## Title
-title: "Шаблон отчёта по лабораторной работе"
-subtitle: "Простейший вариант"
+title: "Лабораторная работа №16"
+subtitle: "Базовая защита от атак типа «brute force»"
 license: "CC BY"
 ---
 
 # Цель работы
 
-Здесь приводится формулировка цели лабораторной работы.
-Формулировки цели для каждой лабораторной работы приведены в методических указаниях.
-
-Цель данного шаблона --- максимально упростить подготовку отчётов по лабораторным работам.
-Модифицируя данный шаблон, студенты смогут без труда подготовить отчёт по лабораторным работам, а также познакомиться с основными возможностями разметки Markdown.
+Получить навыки работы с программным средством Fail2ban для обеспечения 
+базовой защиты от атак типа «brute force».
 
 # Задание
 
-Здесь приводится описание задания в соответствии с рекомендациями методического пособия и выданным вариантом.
+- Установить и настроить Fail2ban для отслеживания работы установленных на сервере служб
 
-# Теоретическое введение
+- Проверить работу Fail2ban посредством попыток несанкционированного доступа с клиента на сервер через SSH
 
-Здесь описываются теоретические аспекты, связанные с выполнением работы.
-
-Например, в [табл. @tbl-std-dir] приведено краткое описание стандартных каталогов Unix.
-
-| Имя каталога | Описание каталога                                                                                                          |
-|--------------|----------------------------------------------------------------------------------------------------------------------------|
-| `/`          | Корневая директория, содержащая всю файловую                                                                               |
-| `/bin `      | Основные системные утилиты, необходимые как в однопользовательском режиме, так и при обычной работе всем пользователям     |
-| `/etc`       | Общесистемные конфигурационные файлы и файлы конфигурации установленных программ                                           |
-| `/home`      | Содержит домашние директории пользователей, которые, в свою очередь, содержат персональные настройки и данные пользователя |
-| `/media`     | Точки монтирования для сменных носителей                                                                                   |
-| `/root`      | Домашняя директория пользователя  `root`                                                                                   |
-| `/tmp`       | Временные файлы                                                                                                            |
-| `/usr`       | Вторичная иерархия для данных пользователя                                                                                 |
-
-: Описание некоторых каталогов файловой системы GNU Linux {#tbl-std-dir}
-
-Более подробно про Unix см. в [@tanenbaum_book_modern-os_ru; @robbins_book_bash_en; @zarrelli_book_mastering-bash_en; @newham_book_learning-bash_en].
+- Напишите скрипт для Vagrant, фиксирующий действия по установке и настройке Fail2ban
 
 # Выполнение лабораторной работы
 
-Описываются проведённые действия, в качестве иллюстрации даётся ссылка на иллюстрацию ([рис. @fig-001]).
+## Защита с помощью Fail2ban
 
-![V Сольвеевский конгресс (1927) «Электроны и фотоны»](image/solvay.jpg){#fig-001 width=70%}
+На ВМ ```server``` установил fail2ban:
+
+```
+dnf -y install fail2ban
+```
+
+Запустил сервер fail2ban:
+
+```
+systemctl enable fail2ban
+systemctl start fail2ban
+```
+
+В дополнительном терминале запустил просмотр журнала событий fail2ban ([рис. @fig-001]):
+
+```
+tail -f /var/log/fail2ban.log
+```
+
+![Мониторинг журнала событий fail2ban](image/1.png){#fig-001 width=70%}
+
+Создал файл с локальной конфигурацией fail2ban:
+
+```
+touch /etc/fail2ban/jail.d/customisation.local
+```
+
+В данный файл записал:
+
+```conf
+[DEFAULT]
+bantime = 3600
+
+[sshd]
+port = ssh,2022
+enabled = true
+
+[sshd-ddos]
+filter = sshd
+enabled = true
+
+[selinux-ssh]
+enabled = true
+```
+
+Перезапустил службу и проверил журнал событий:
+
+![Мониторинг журнала событий fail2ban 2](image/2.png){#fig-002 width=70%}
+
+Продолжил вносить изменения в файл конфигурации:
+
+```conf
+[apache-auth]
+enabled = true
+
+[apache-badbots]
+enabled = true
+
+[apache-noscript]
+enabled = true
+
+[apache-overflows]
+enabled = true
+
+[apache-nohome]
+enabled = true
+
+[apache-botsearch]
+enabled = true
+
+[apache-fakegooglebot]
+enabled = true
+
+[apache-modsecurity]
+enabled = true
+
+[apache-shellshock]
+enabled = true
+```
+
+Снова перезапустил службу и проверил журнал событий:
+
+![Мониторинг журнала событий fail2ban 3](image/3.png){#fig-003 width=70%}
+
+Продолжил вностить изменения в файл конфигурации:
+
+```conf
+[postfix]
+enabled = true
+
+[postfix-rbl]
+enabled = true
+
+[dovecot]
+enabled = true
+
+[postfix-sasl]
+enabled = true
+```
+
+Снова перезапустил службу и проверил журнал событий:
+
+![Мониторинг журнала событий fail2ban 4](image/4.png){#fig-004 width=70%}
+
+## Проверка работы Fail2ban
+
+На сервере проверил статус fail2ban и статус защиты SSH в fail2ban:
+
+```
+fail2ban-client status
+
+fail2ban-client status sshd
+```
+
+![Статус fail2ban](image/5.png){#fig-005 width=70%}
+
+После установил максимальное количество ошибок для SSH на 2:
+
+```
+fail2ban-client set sshd maxretry 2
+```
+
+Попытался зайти на сервер с клиента посредством SSH:
+
+![Попытка входа SSH](image/6.png){#fig-006 width=70%}
+
+Проверил, что клиент был заблокирован:
+ 
+```
+fail2ban-client status sshd
+```
+ 
+![Статус SSH fail2ban](image/7.png){#fig-007 width=70%}
+
+Разблокировал клиента и снова проверил статус:
+
+```
+fail2ban-client set sshd unbanip 192.168.1.30
+
+fail2ban-client status sshd
+```
+
+![Статус SSH fail2ban 2](image/8.png){#fig-008 width=70%}
+
+Внес изменения в конфигурационный файл, добавив клиента в исключения:
+
+```conf
+[DEFAULT]
+bantime = 3600
+
+ignoreip = 127.0.0.1/8 192.168.1.30
+```
+
+И перезапустил службу:
+
+```
+systemctl restart fail2ban
+```
+
+Вновь попытлся зайти на сервер с клиента посредством SSH:
+
+![Попытка входа SSH 2](image/9.png){#fig-009 width=70%}
+
+![Статус SSH fail2ban 3](image/10.png){#fig-010 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant/provision/server
+
+mkdir -p /vagrant/provision/server/protect/etc/fail2ban/jail.d
+cp -R /etc/fail2ban/jail.d/customisation.local \
+   /vagrant/provision/server/protect/etc/fail2ban/jail.d/
+
+touch protect.sh
+chmod +x protect.sh
+```
+
+В файл ```/vagrant/provision/server/protect.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install fail2ban
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/protect/etc/* /etc
+restorecon -vR /etc
+
+echo "Start fail2ban service"
+systemctl enable fail2ban
+systemctl start fail2ban
+```
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующую секцию:
+
+```conf
+server.vm.provision "server protect",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/protect.sh"
+```
 
 # Выводы
 
-Здесь кратко описываются итоги проделанной работы.
-
-# Список литературы{.unnumbered}
-
-::: {#refs}
-:::
+Я получил навыки работы с программным средством Fail2ban для обеспечения 
+базовой защиты от атак типа «brute force».
