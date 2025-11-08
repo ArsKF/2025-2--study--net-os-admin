@@ -1,5 +1,5 @@
-# 2.2.0 (2025-11-07)
+# 2.3.0 (2025-11-08)
 
 ### Features
 
-* **lab02:** finish lab02 ([1e50df1](https://github.com/ArsKF/2025-2--study--net-os-admin/commit/1e50df12594eb69da641d91b122022b37fb6e93b))
+* **lab03:** finish lab03 ([2be4345](https://github.com/ArsKF/2025-2--study--net-os-admin/commit/2be43452e3957ac744e60e763939e5b978d4808b))
