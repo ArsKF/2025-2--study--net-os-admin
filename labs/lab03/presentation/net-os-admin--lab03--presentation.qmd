@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -12,13 +10,12 @@ author:
       city: Москва
       address: ул. Миклухо-Маклая, д. 6
 ## Title
-title: Структура научной презентации
-subtitle: Простейший вариант
+title: Лабораторная работа №3
+subtitle: Настройка DNS-сервера
 license: CC BY
 date: today
 date-format: "YYYY-MM-DD" # Example: 2025-09-06
 ---
-
 # Информация
 
 ## Докладчик
@@ -26,175 +23,438 @@ date-format: "YYYY-MM-DD" # Example: 2025-09-06
 :::::::::::::: {.columns align=center}
 ::: {.column width="70%"}
 
-  * Кулябов Дмитрий Сергеевич
-  * д.ф.-м.н., профессор
-  * профессор кафедры теории вероятностей и кибербезопасности
+  * Арсений Валерьевич Агаев
+  * студент
   * Российский университет дружбы народов им. П. Лумумбы
-  * [kulyabov-ds@rudn.ru](mailto:kulyabov-ds@rudn.ru)
-  * <https://yamadharma.github.io/ru/>
+  * [1032221668@rudn.ru](mailto:1032221668@rudn.ru)
 
 :::
 ::: {.column width="30%"}
 
-![](./image/kulyabov.jpg)
-
 :::
 ::::::::::::::
 
-# Вводная часть
+# Цели и задачи
 
-## Актуальность
+Приобрести практические навыки по установке и конфигурированию DHCP-сервера.
 
-- Важно донести результаты своих исследований до окружающих
-- Научная презентация --- рабочий инструмент исследователя
-- Необходимо создавать презентацию быстро
-- Желательна минимизация усилий для создания презентации
+- Установить на ВМ ```server``` DHCP-сервер
 
-## Объект и предмет исследования
+- Настроить ВМ ```server``` в качестве DHCP-сервера
 
-- Презентация как текст
-- Программное обеспечение для создания презентаций
-- Входные и выходные форматы презентаций
+- Проверить корректность работы DHCP-сервера
 
-## Цели и задачи
+- Настроить  обновление DNS-зоны при появлении новых узлов
 
-- Создать шаблон презентации в Markdown
-- Описать алгоритм создания выходных форматов презентаций
+- Проверить корректность работы DHCP-сервера и обновления DNS-зоны
 
-## Материалы и методы
+- Написать скрипт для Vagrant, фиксирующий действия по установке и настройке DHCP-сервера
 
-- Процессор `pandoc` для входного формата Markdown
-- Результирующие форматы
-	- `pdf`
-	- `html`
-- Автоматизация процесса создания: `Makefile`
+# Содержание исследования
 
-# Создание презентации
+## Установка DHCP-сервера
 
-## Процессор `pandoc`
+Под суперпользователем я установил dhcp:
 
-- Pandoc: преобразователь текстовых файлов
-- Сайт: <https://pandoc.org/>
-- Репозиторий: <https://github.com/jgm/pandoc>
-
-## Формат `pdf`
-
-- Использование LaTeX
-- Пакет для презентации: [beamer](https://ctan.org/pkg/beamer)
-- Тема оформления: `metropolis`
-
-## Код для формата `pdf`
-
-```yaml
-slide_level: 2
-aspectratio: 169
-section-titles: true
-theme: metropolis
+```
+dnf -y install kea
 ```
 
-## Формат `html`
+## Конфигурирование DHCP-сервера
 
-- Используется фреймворк [reveal.js](https://revealjs.com/)
-- Используется [тема](https://revealjs.com/themes/) `beige`
+Перед модификацией конфигурационного файла, я делаю его копию:
 
-## Код для формата `html`
-
-- Тема задаётся в файле `Makefile`
-
-```make
-REVEALJS_THEME = beige
 ```
+cp /etc/kea/kea-dhcp4.conf /etc/kea/kea-dhcp4.conf__$(date -I)
+```
+
+После открываю его и изменяю стандартные значения на свои:
+
+```conf
+"interfaces-config": {
+  "interfaces": [ "eth1" ]
+},
+...
+{ 
+  "code": 15,
+  "data": "avagaev.net"
+},
+{
+  "name": "domain-search",
+  "data": "avagaev.net"
+},
+...
+{ 
+  "name": "domain-name-servers",
+  "data": "192.168.1.1"
+},
+...
+"subnet4": [
+  {
+    "id": 1,
+    "subnet": "192.168.1.0/24",
+    "pools": [ { "pool": "192.168.1.30 - 192.168.1.199" } ],
+    "option-data": [
+      {
+        "name": "routers",
+        "data": "192.168.1.1"
+      }
+    ]
+  }
+],
+```
+
+## Конфигурирование DHCP-сервера
+
+После проверил правильность файла:
+
+```
+kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
+```
+
+И перезапустил конфигурацию:
+
+```
+systemctl --system daemon-reload
+systemctl enable kea-dhcp4.service
+```
+
+Добавил записи в
+
+файл ```/var/named/master/fz/avagaev.net```:
+
+```conf
+dhcp	A	192.168.1.1
+```
+
+и в файл ```/var/named/master/rz/192.168.1```:
+
+```conf
+1	PTR	dhcp.avagaev.net.
+```
+
+## Конфигурирование DHCP-сервера
+
+И перезапустил named и проверил доступность DHCP-сервера:
+
+```
+systemctl restart named
+
+ping dhcp.avagaev.net
+```
+
+После внес изменения в настройки межсетевого экрана и восстановил контекст безопасности SELinux:
+
+```
+firewall-cmd --add-service=dhcp
+firewall-cmd --add-service=dhcp --permanent
+
+restorecon -vR /etc
+restorecon -vR /var/named
+restorecon -vR /var/lib/kea/
+```
+
+## Конфигурирование DHCP-сервера
+
+![Настройка DHCP-сервера](image/1.png){#fig-001 width=70%}
+
+## Конфигурирование DHCP-сервера
+
+В дополнительном терминали запустил мониторинг происходящих процессов ([рис. @fig-002]):
+
+```
+tail -f /var/log/messages
+```
+
+И запустил DHCP-сервер в основном терминале:
+
+```
+systemctl start kea-dhcp4.service
+```
+
+## Конфигурирование DHCP-сервера
+
+![Мониторинг процессов](image/2.png){#fig-002 width=70%}
+
+## Анализ работы DHCP-сервера
+
+В лабораторной работе 1 я уже создавал скрипт ```01-routing.sh``` на ВМ ```client```, 
+поэтому сразу перехожу запуску клиента:
+
+На ВМ ```client``` посмотрел информацию об имеющихся интерфейсах ([рис. @fig-003]):
+
+![ifconfig клиента](image/3.png){#fig-003 width=70%}
+
+## Анализ работы DHCP-сервера
+
+На ВМ ```server``` посмотрел список выданных адресов ([рис. @fig-004]):
+
+![Список выданных адресов на сервере](image/4.png){#fig-004 width=70%}
+
+## Настройка обновления DNS-зоны
+
+Создал ключ на сервере и выдам правильные права:
+
+```
+mkdir -p /etc/named/keys
+tsig-keygen -a HMAC-SHA512 DHCP_UPDATER > /etc/named/keys/dhcp_updater.key
+chown -R named:named /etc/named/keys
+```
+
+После подключил ключ в файле ```/etc/named.conf```:
+
+```conf
+include "/etc/named/keys/dhcp_updater.key";
+```
+
+## Настройка обновления DNS-зоны
+
+Соответствующим образом отредактировал ```/etc/named/avagev.net```:
+
+```conf
+zone "avagaev.net" IN {
+  type master;
+  file "master/fz/avagaev.net";
+  update-policy {
+    grant DHCP_UPDATER wildcard *.avagaev.net A DHCID;
+  };
+};
+zone "1.168.192.in-addr.arpa" IN {
+  type master;
+  file "master/rz/192.168.1";
+  update-policy {
+    grant DHCP_UPDATER wildcard *.1.168.192.in-addr.arpa PTR DHCID;
+  };
+};
+```
+
+После проверил конфигурацию и перезапустил:
+
+```
+named-checkconf
+systemctl restart named
+```
+
+## Настройка обновления DNS-зоны
+
+Сформировал ключ ```/etc/kea/tsig-keys.json``` в формате JSON:
+
+```json
+"tsig-keys": [
+  {
+    "name": "DHCP_UPDATER",
+    "algorithm": "hmac-sha512",
+    "secret": "YyGdrOdyvv47Fsuvs4gRsIuCRfXUoEIVpj4n0RErbNHeG18veNrvNPdFkL1bDPGzdbVKbz8idRC4AjrtZ8nxQ=="
+  }
+],
+```
+
+Сменил владельца и поправил права доступа:
+
+```
+chown kea:kea /etc/kea/tsig-keys.json
+chmod 640 /etc/kea/tsig-keys.json
+```
+
+## Настройка обновления DNS-зоны
+
+Настроил файл ```/etc/kea/kea-dhcp-ddns.conf```:
+
+```conf
+{ 
+  "DhcpDdns": {
+    "ip-address": "127.0.0.1",
+    "port": 53001,
+    "control-socket": {
+      "socket-type": "unix",
+      "socket-name": "/run/kea/kea-ddns-ctrl-socket"
+    },
+    <?include "/etc/kea/tsig-keys.json"?>
+    "forward-ddns" : {
+      "ddns-domains" : [
+        {
+          "name": "avagaev.net.",
+          "key-name": "DHCP_UPDATER",
+          "dns-servers": [
+             { "ip-address": "192.168.1.1" }
+          ]
+        }
+      ]
+    },
+    "reverse-ddns" : {
+      "ddns-domains" : [
+        {
+          "name": "1.168.192.in-addr.arpa.",
+          "key-name": "DHCP_UPDATER",
+          "dns-servers": [
+             { "ip-address": "192.168.1.1" }
+          ]
+        }
+      ]
+    },
+    "loggers": [
+      {
+        "name": "kea-dhcp-ddns",
+        "output_options": [
+           {
+             "output": "stdout",
+             "pattern": "%-5p %m\n"
+           }
+        ],
+        "severity": "INFO",
+        "debuglevel": 0
+      }
+    ]
+  }
+}
+```
+
+## Настройка обновления DNS-зоны
+
+Изменил владельца файла:
+ 
+```
+chown kea:kea /etc/kea/kea-dhcp-ddns.conf
+```
+ 
+Проверил файл на синтаксические ошибки:
+  
+```
+kea-dhcp-ddns -t /etc/kea/kea-dhcp-ddns.conf
+```
+
+И запустил службу ddns:
+
+```
+systemctl enable --now kea-dhcp-ddns.service
+```
+
+Проверил ее статус:
+
+```
+systemctl status kea-dhcp-ddns.service
+```
+
+## Настройка обновления DNS-зоны
+
+![Статус DDNS DHCP](image/5.png){#fig-005 width=70%}
+
+## Настройка обновления DNS-зоны
+
+Внес изменения в ```/etc/kea/kea-dhcp4.conf```:
+
+```conf
+"dhcp-ddns": {
+  "enable-updates": true
+},
+"ddns-qualifying-suffix": "avagaev.net",
+"ddns-override-client-update": true,
+...
+```
+
+Проверил на синтакстические ошибки:
+
+```
+kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
+```
+
+Перезапустил и проверил статус:
+
+```
+systemctl restart kea-dhcp4.service
+systemctl status kea-dhcp4.service
+```
+
+## Настройка обновления DNS-зоны
+
+![Статус DHCP](image/6.png){#fig-006 width=70%}
+
+## Настройка обновления DNS-зоны
+
+На ВМ ```client``` переполучил адрес:
+
+```
+nmcli connection down eth1
+nmcli connection up eth1
+```
+
+В каталоге прямой зоны появился файл ```avagaev.net.jnl```:
+
+## Настройка обновления DNS-зоны
+
+![Файл изменения записей зоны](image/7.png){#fig-007 width=70%}
+
+## Анализ работы DHCP-сервера после настройки обновления DNS-зоны
+
+На ВМ ```client``` проверил запись о клиенте:
+
+```
+dig @192.168.1.1 client.avagaev.net
+```
+
+![Запись о клиенте](image/8.png){#fig-008 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant/provision/server
+
+mkdir -p /vagrant/provision/server/dhcp/etc/kea
+cp -R /etc/kea/* /vagrant/provision/server/dhcp/etc/kea/
+
+cp -R /var/named/* /vagrant/provision/server/dns/var/named/
+cp -R /etc/named/* /vagrant/provision/server/dns/etc/named/
+
+touch dhcp.sh
+chmod +x dhcp.sh
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+В файл ```/vagrant/provision/server/dhcp.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install kea
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/dhcp/etc/kea/* /etc/kea/
+
+echo "Fix permissions"
+chown -R kea:kea /etc/kea
+chmod 640 /etc/kea/tsig-keys.json
+
+restorecon -vR /etc
+restorecon -vR /var/lib/kea
+
+echo "Configure firewall"
+firewall-cmd --add-service dhcp
+firewall-cmd --add-service dhcp --permanent
+
+echo "Start dhcpd service"
+systemctl --system daemon-reload
+systemctl enable --now kea-dhcp4.service
+systemctl enable --now kea-dhcp-ddns.service
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующую секцию:
+
+```conf
+server.vm.provision "server dhcp",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/dhcp.sh"
+```
+
 # Результаты
 
-## Получающиеся форматы
-
-- Полученный `pdf`-файл можно демонстрировать в любой программе просмотра `pdf`
-- Полученный `html`-файл содержит в себе все ресурсы: изображения, css, скрипты
-
-# Элементы презентации
-
-## Актуальность
-
-- Даёт понять, о чём пойдёт речь
-- Следует широко и кратко описать проблему
-- Мотивировать свое исследование
-- Сформулировать цели и задачи
-- Возможна формулировка ожидаемых результатов
-
-## Цели и задачи
-
-- Не формулируйте более 1--2 целей исследования
-
-## Материалы и методы
-
-- Представляйте данные качественно
-- Количественно, только если крайне необходимо
-- Излишние детали не нужны
-
-## Содержание исследования
-
-- Предлагаемое решение задач исследования с обоснованием
-- Основные этапы работы
-
-## Результаты
-
-- Не нужны все результаты
-- Необходимы логические связки между слайдами
-- Необходимо показать понимание материала
-
-
-## Итоговый слайд
-
-- Запоминается последняя фраза. © Штирлиц
-- Главное сообщение, которое вы хотите донести до слушателей
-- Избегайте использовать последний слайд вида *Спасибо за внимание*
-
-# Рекомендую
-
-## Принцип 10/20/30
-
-  - 10 слайдов
-  - 20 минут на доклад
-  - 30 кегль шрифта
-
-## Связь слайдов
-
-::: incremental
-
-- Один слайд --- одна мысль
-- Нельзя ссылаться на объекты, находящиеся на предыдущих слайдах (например, на формулы)
-- Каждый слайд должен иметь заголовок
-
-:::
-
-## Количество сущностей
-
-::: incremental
-
-- Человек может одновременно помнить $7 \pm 2$ элемента
-- При размещении информации на слайде старайтесь чтобы в сумме слайд содержал не более 5 элементов
-- Можно группировать элементы так, чтобы визуально было не более 5 групп
-
-:::
-
-## Общие рекомендации
-
-::: incremental
-
-- На слайд выносится та информация, которая без зрительной опоры воспринимается хуже
-- Слайды должны дополнять или обобщать содержание выступления или его частей, а не дублировать его
-- Информация на слайдах должна быть изложена кратко, чётко и хорошо структурирована
-- Слайд не должен быть перегружен графическими изображениями и текстом
-- Не злоупотребляйте анимацией и переходами
-
-:::
-
-## Представление данных
-
-::: incremental
-
-- Лучше представить в виде схемы
-- Менее оптимально представить в виде рисунка, графика, таблицы
-- Текст используется, если все предыдущие способы отображения информации не подошли
-
-:::
+Я приобрёл практические навыки по установке и конфигурированию DHCP-сервера.
