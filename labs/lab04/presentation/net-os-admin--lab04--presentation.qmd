@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -12,13 +10,12 @@ author:
       city: Москва
       address: ул. Миклухо-Маклая, д. 6
 ## Title
-title: Структура научной презентации
-subtitle: Простейший вариант
+title: Лабораторная работа №4
+subtitle: Базовая настройка HTTP-сервера Apache
 license: CC BY
 date: today
 date-format: "YYYY-MM-DD" # Example: 2025-09-06
 ---
-
 # Информация
 
 ## Докладчик
@@ -26,175 +23,261 @@ date-format: "YYYY-MM-DD" # Example: 2025-09-06
 :::::::::::::: {.columns align=center}
 ::: {.column width="70%"}
 
-  * Кулябов Дмитрий Сергеевич
-  * д.ф.-м.н., профессор
-  * профессор кафедры теории вероятностей и кибербезопасности
+  * Арсений Валерьевич Агаев
+  * студент
   * Российский университет дружбы народов им. П. Лумумбы
-  * [kulyabov-ds@rudn.ru](mailto:kulyabov-ds@rudn.ru)
-  * <https://yamadharma.github.io/ru/>
+  * [1032221668@rudn.ru](mailto:1032221668@rudn.ru)
 
 :::
 ::: {.column width="30%"}
 
-![](./image/kulyabov.jpg)
-
 :::
 ::::::::::::::
 
-# Вводная часть
+# Цели и задачи
 
-## Актуальность
+Приобрести практические навыки по установке и базовому конфигурированию HTTP-сервера Apache.
 
-- Важно донести результаты своих исследований до окружающих
-- Научная презентация --- рабочий инструмент исследователя
-- Необходимо создавать презентацию быстро
-- Желательна минимизация усилий для создания презентации
+- Установить необходимые для работы HTTP-сервера пакеты
 
-## Объект и предмет исследования
+- Запустить HTTP-сервер с базовой конфигурацией и проанализировать его работу
 
-- Презентация как текст
-- Программное обеспечение для создания презентаций
-- Входные и выходные форматы презентаций
+- Настроить виртуальный хостинг
 
-## Цели и задачи
+- Написать скрипт для Vagrant, фиксирующий действия по установке и настройке HTTP-сервера.
 
-- Создать шаблон презентации в Markdown
-- Описать алгоритм создания выходных форматов презентаций
+# Содержание исследования 
 
-## Материалы и методы
+## Установка HTTP-сервера
 
-- Процессор `pandoc` для входного формата Markdown
-- Результирующие форматы
-	- `pdf`
-	- `html`
-- Автоматизация процесса создания: `Makefile`
+Установил из репозитория стандартный веб-сервер, посредством установки группы:
 
-# Создание презентации
-
-## Процессор `pandoc`
-
-- Pandoc: преобразователь текстовых файлов
-- Сайт: <https://pandoc.org/>
-- Репозиторий: <https://github.com/jgm/pandoc>
-
-## Формат `pdf`
-
-- Использование LaTeX
-- Пакет для презентации: [beamer](https://ctan.org/pkg/beamer)
-- Тема оформления: `metropolis`
-
-## Код для формата `pdf`
-
-```yaml
-slide_level: 2
-aspectratio: 169
-section-titles: true
-theme: metropolis
+```
+LANG=C yum grouplist
+dnf -y groupinstall "Basic Web Server"
 ```
 
-## Формат `html`
+## Базовое конфигурирование HTTP-сервера
 
-- Используется фреймворк [reveal.js](https://revealjs.com/)
-- Используется [тема](https://revealjs.com/themes/) `beige`
+Настроил межсетевой экран для работы HTTP-сервера:
 
-## Код для формата `html`
-
-- Тема задаётся в файле `Makefile`
-
-```make
-REVEALJS_THEME = beige
 ```
+firewall-cmd --add-service=http
+firewall-cmd --add-service=http --permanent
+```
+
+В дополнительном терминале запустил расширенный мониторинг системных сообщений:
+
+```
+journalctl -x -l
+```
+
+Запустил сервер:
+
+```
+systemctl enable httpd
+systemctl start httpd
+```
+
+## Базовое конфигурирование HTTP-сервера
+
+![Расширенный мониторинг системных сообщений](image/1.png){#fig-001 width=70%}
+
+## Анализ работы HTTP-сервера
+
+На ВМ ```server``` в двух окнах запустил мониторинг ошибок и доступа к HTTP-серверу:
+
+```
+tail -f /var/log/httpd/error_log
+
+tail -f /var/log/httpd/access_log
+```
+
+На ВМ ```client``` через браузер зашел на страницу сервера по адресу ```192.168.1.1```:
+
+## Анализ работы HTTP-сервера
+
+![Страница сервера](image/2.png){#fig-002 width=70%}
+
+## Анализ работы HTTP-сервера
+
+Сообщения в логах:
+
+![Логи доступа](image/3.png){#fig-003 width=70%}
+
+В нем появились записи о HTTP запросах от клиента и статус ответа от сервера.
+
+## Настройка виртуального хостинга для HTTP-сервера
+
+Остановил работу DNS-сервера и добавил записи в файлы прямой и обратной зон:
+
+```
+systemctl stop named
+```
+
+Файл ```/var/named/master/fz/avagaev.net```:
+
+```conf
+...
+www	A	192.168.1.1
+```
+
+Файл ```/var/named/master/rz/192.168.1```:
+
+```conf
+...
+1	PTR	www.avagaev.net.
+```
+
+При этом удалил файлы журналов DNS.
+
+## Настройка виртуального хостинга для HTTP-сервера
+
+Обратно запустил DNS-сервер:
+
+```
+systemctl start named
+```
+
+
+После создал файлы конфигураций ```server.avagaev.net.conf``` и 
+```www.avagaev.net.conf``` в каталоге ```/etc/httpd/conf.d```:
+
+```
+cd /etc/httpd/conf.d
+touch server.avagaev.net.conf
+touch www.avagaev.net.conf
+```
+
+## Настройка виртуального хостинга для HTTP-сервера
+
+В файле ```server.avagaev.net.conf``` записал следующее:
+
+```conf
+<VirtualHost *:80>
+  ServerAdmin webmaster@avagaev.net
+  DocumentRoot /var/www/html/server.avagaev.net
+  ServerName server.avagaev.net
+  ErrorLog logs/server.avagaev.net-error_log
+  CustomLog logs/server.avagaev.net-access_log common
+</VirtualHost>
+```
+
+В файле ```www.avagaev.net.conf``` записал следующее:
+
+```conf
+<VirtualHost *:80>
+  ServerAdmin webmaster@avagaev.net
+  DocumentRoot /var/www/html/www.avagaev.net
+  ServerName www.avagaev.net
+  ErrorLog logs/www.avagaev.net-error_log
+  CustomLog logs/www.avagaev.net-access_log common
+</VirtualHost>
+```
+
+## Настройка виртуального хостинга для HTTP-сервера
+
+После перешёл в каталог ```/var/www/html``` и создал там соответствующие подкаталоги и index файлы:
+
+```
+cd /var/www/html
+mkdir server.avagaev.net
+mkdir www.avagaev.net
+touch server.avagaev.net/index.html
+touch www.avagaev.net/index.html
+```
+
+В индекс файлы записал ```Welcome to the server.avagaev.net server.``` 
+и ```Welcome to the www.avagaev.net server.``` соответственно.
+
+Скорректировал контекст безопасности SELinux:
+
+## Настройка виртуального хостинга для HTTP-сервера
+
+```
+restorecon -vR /etc
+restorecon -vR /var/named
+restorecon -vR /var/www
+```
+
+Перезапустил сервер:
+
+```
+systemctl restart httpd
+```
+
+С ВМ ```client``` с помощью браузера перешел на соответствующие 
+страницы:
+
+## Настройка виртуального хостинга для HTTP-сервера
+
+![WWW страница](image/4.png){#fig-004 width=70%}
+
+## Настройка виртуального хостинга для HTTP-сервера
+
+![Server страница](image/5.png){#fig-005 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant/provision/server
+
+mkdir -p /vagrant/provision/server/http/etc/httpd/conf.d
+mkdir -p /vagrant/provision/server/http/var/www/html
+
+cp -R /etc/httpd/conf.d/* \
+    /vagrant/provision/server/http/etc/httpd/conf.d/
+cp -R /var/www/html/* /vagrant/provision/server/http/var/www/html
+cp -R /var/named/* /vagrant/provision/server/dns/var/named/
+
+touch http.sh
+chmod +x http.sh
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+В файл ```/vagrant/provision/server/http.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y groupinstall "Basic Web Server"
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/http/etc/httpd/* /etc/httpd
+cp -R /vagrant/provision/server/http/var/www/* /var/www
+
+chown -R apache:apache /var/www
+
+restorecon -vR /etc
+restorecon -vR /var/www
+
+echo "Configure firewall"
+firewall-cmd --add-service=http
+firewall-cmd --add-service=http --permanent
+
+echo "Start http service"
+systemctl enable httpd
+systemctl start httpd
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующую секцию:
+
+```conf
+server.vm.provision "server http",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/http.sh"
+```
+
 # Результаты
 
-## Получающиеся форматы
-
-- Полученный `pdf`-файл можно демонстрировать в любой программе просмотра `pdf`
-- Полученный `html`-файл содержит в себе все ресурсы: изображения, css, скрипты
-
-# Элементы презентации
-
-## Актуальность
-
-- Даёт понять, о чём пойдёт речь
-- Следует широко и кратко описать проблему
-- Мотивировать свое исследование
-- Сформулировать цели и задачи
-- Возможна формулировка ожидаемых результатов
-
-## Цели и задачи
-
-- Не формулируйте более 1--2 целей исследования
-
-## Материалы и методы
-
-- Представляйте данные качественно
-- Количественно, только если крайне необходимо
-- Излишние детали не нужны
-
-## Содержание исследования
-
-- Предлагаемое решение задач исследования с обоснованием
-- Основные этапы работы
-
-## Результаты
-
-- Не нужны все результаты
-- Необходимы логические связки между слайдами
-- Необходимо показать понимание материала
-
-
-## Итоговый слайд
-
-- Запоминается последняя фраза. © Штирлиц
-- Главное сообщение, которое вы хотите донести до слушателей
-- Избегайте использовать последний слайд вида *Спасибо за внимание*
-
-# Рекомендую
-
-## Принцип 10/20/30
-
-  - 10 слайдов
-  - 20 минут на доклад
-  - 30 кегль шрифта
-
-## Связь слайдов
-
-::: incremental
-
-- Один слайд --- одна мысль
-- Нельзя ссылаться на объекты, находящиеся на предыдущих слайдах (например, на формулы)
-- Каждый слайд должен иметь заголовок
-
-:::
-
-## Количество сущностей
-
-::: incremental
-
-- Человек может одновременно помнить $7 \pm 2$ элемента
-- При размещении информации на слайде старайтесь чтобы в сумме слайд содержал не более 5 элементов
-- Можно группировать элементы так, чтобы визуально было не более 5 групп
-
-:::
-
-## Общие рекомендации
-
-::: incremental
-
-- На слайд выносится та информация, которая без зрительной опоры воспринимается хуже
-- Слайды должны дополнять или обобщать содержание выступления или его частей, а не дублировать его
-- Информация на слайдах должна быть изложена кратко, чётко и хорошо структурирована
-- Слайд не должен быть перегружен графическими изображениями и текстом
-- Не злоупотребляйте анимацией и переходами
-
-:::
-
-## Представление данных
-
-::: incremental
-
-- Лучше представить в виде схемы
-- Менее оптимально представить в виде рисунка, графика, таблицы
-- Текст используется, если все предыдущие способы отображения информации не подошли
-
-:::
+Я успешно приобрёл практические навыки по установке и базовому конфигурированию HTTP-сервера Apache.
