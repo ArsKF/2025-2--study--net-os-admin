@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -13,55 +11,234 @@ author:
       address: ул. Миклухо-Маклая, д. 6
 
 ## Title
-title: "Шаблон отчёта по лабораторной работе"
-subtitle: "Простейший вариант"
+title: "Лабораторная работа №4"
+subtitle: "Базовая настройка HTTP-сервера Apache"
 license: "CC BY"
 ---
 
 # Цель работы
 
-Здесь приводится формулировка цели лабораторной работы.
-Формулировки цели для каждой лабораторной работы приведены в методических указаниях.
-
-Цель данного шаблона --- максимально упростить подготовку отчётов по лабораторным работам.
-Модифицируя данный шаблон, студенты смогут без труда подготовить отчёт по лабораторным работам, а также познакомиться с основными возможностями разметки Markdown.
+Приобрести практические навыки по установке и базовому конфигурированию HTTP-сервера Apache.
 
 # Задание
 
-Здесь приводится описание задания в соответствии с рекомендациями методического пособия и выданным вариантом.
+- Установить необходимые для работы HTTP-сервера пакеты
 
-# Теоретическое введение
+- Запустить HTTP-сервер с базовой конфигурацией и проанализировать его работу
 
-Здесь описываются теоретические аспекты, связанные с выполнением работы.
+- Настроить виртуальный хостинг
 
-Например, в [табл. @tbl-std-dir] приведено краткое описание стандартных каталогов Unix.
-
-| Имя каталога | Описание каталога                                                                                                          |
-|--------------|----------------------------------------------------------------------------------------------------------------------------|
-| `/`          | Корневая директория, содержащая всю файловую                                                                               |
-| `/bin `      | Основные системные утилиты, необходимые как в однопользовательском режиме, так и при обычной работе всем пользователям     |
-| `/etc`       | Общесистемные конфигурационные файлы и файлы конфигурации установленных программ                                           |
-| `/home`      | Содержит домашние директории пользователей, которые, в свою очередь, содержат персональные настройки и данные пользователя |
-| `/media`     | Точки монтирования для сменных носителей                                                                                   |
-| `/root`      | Домашняя директория пользователя  `root`                                                                                   |
-| `/tmp`       | Временные файлы                                                                                                            |
-| `/usr`       | Вторичная иерархия для данных пользователя                                                                                 |
-
-: Описание некоторых каталогов файловой системы GNU Linux {#tbl-std-dir}
-
-Более подробно про Unix см. в [@tanenbaum_book_modern-os_ru; @robbins_book_bash_en; @zarrelli_book_mastering-bash_en; @newham_book_learning-bash_en].
+- Написать скрипт для Vagrant, фиксирующий действия по установке и настройке HTTP-сервера.
 
 # Выполнение лабораторной работы
 
-Описываются проведённые действия, в качестве иллюстрации даётся ссылка на иллюстрацию ([рис. @fig-001]).
+## Установка HTTP-сервера
 
-![V Сольвеевский конгресс (1927) «Электроны и фотоны»](image/solvay.jpg){#fig-001 width=70%}
+Установил из репозитория стандартный веб-сервер, посредством установки группы:
+
+```
+LANG=C yum grouplist
+dnf -y groupinstall "Basic Web Server"
+```
+
+## Базовое конфигурирование HTTP-сервера
+
+Настроил межсетевой экран для работы HTTP-сервера:
+
+```
+firewall-cmd --add-service=http
+firewall-cmd --add-service=http --permanent
+```
+
+В дополнительном терминале запустил расширенный мониторинг системных сообщений:
+
+```
+journalctl -x -l
+```
+
+Запустил сервер:
+
+```
+systemctl enable httpd
+systemctl start httpd
+```
+
+![Расширенный мониторинг системных сообщений](image/1.png){#fig-001 width=70%}
+
+## Анализ работы HTTP-сервера
+
+На ВМ ```server``` в двух окнах запустил мониторинг ошибок и доступа к HTTP-серверу:
+
+```
+tail -f /var/log/httpd/error_log
+
+tail -f /var/log/httpd/access_log
+```
+
+На ВМ ```client``` через браузер зашел на страницу сервера по адресу ```192.168.1.1``` ([рис. @fig-002]):
+
+![Страница сервера](image/2.png){#fig-002 width=70%}
+
+Сообщения в логах:
+
+![Логи доступа](image/3.png){#fig-003 width=70%}
+
+В нем появились записи о HTTP запросах от клиента и статус ответа от сервера.
+
+## Настройка виртуального хостинга для HTTP-сервера
+
+Остановил работу DNS-сервера и добавил записи в файлы прямой и обратной зон:
+
+```
+systemctl stop named
+```
+
+Файл ```/var/named/master/fz/avagaev.net```:
+
+```conf
+...
+www	A	192.168.1.1
+```
+
+Файл ```/var/named/master/rz/192.168.1```:
+
+```conf
+...
+1	PTR	www.avagaev.net.
+```
+
+При этом удалил файлы журналов DNS.
+
+Обратно запустил DNS-сервер:
+
+```
+systemctl start named
+```
+
+После создал файлы конфигураций ```server.avagaev.net.conf``` и 
+```www.avagaev.net.conf``` в каталоге ```/etc/httpd/conf.d```:
+
+```
+cd /etc/httpd/conf.d
+touch server.avagaev.net.conf
+touch www.avagaev.net.conf
+```
+
+В файле ```server.avagaev.net.conf``` записал следующее:
+
+```conf
+<VirtualHost *:80>
+  ServerAdmin webmaster@avagaev.net
+  DocumentRoot /var/www/html/server.avagaev.net
+  ServerName server.avagaev.net
+  ErrorLog logs/server.avagaev.net-error_log
+  CustomLog logs/server.avagaev.net-access_log common
+</VirtualHost>
+```
+
+В файле ```www.avagaev.net.conf``` записал следующее:
+
+```conf
+<VirtualHost *:80>
+  ServerAdmin webmaster@avagaev.net
+  DocumentRoot /var/www/html/www.avagaev.net
+  ServerName www.avagaev.net
+  ErrorLog logs/www.avagaev.net-error_log
+  CustomLog logs/www.avagaev.net-access_log common
+</VirtualHost>
+```
+
+После перешёл в каталог ```/var/www/html``` и создал там соответствующие подкаталоги и index файлы:
+
+```
+cd /var/www/html
+mkdir server.avagaev.net
+mkdir www.avagaev.net
+touch server.avagaev.net/index.html
+touch www.avagaev.net/index.html
+```
+
+В индекс файлы записал ```Welcome to the server.avagaev.net server.``` 
+и ```Welcome to the www.avagaev.net server.``` соответственно.
+
+Скорректировал контекст безопасности SELinux:
+
+```
+restorecon -vR /etc
+restorecon -vR /var/named
+restorecon -vR /var/www
+```
+
+Перезапустил сервер:
+
+```
+systemctl restart httpd
+```
+
+С ВМ ```client``` с помощью браузера перешел на соответствующие 
+страницы ([рис. @fig-004] и [рис. @fig-005]):
+
+![WWW страница](image/4.png){#fig-004 width=70%}
+
+![Server страница](image/5.png){#fig-005 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant/provision/server
+
+mkdir -p /vagrant/provision/server/http/etc/httpd/conf.d
+mkdir -p /vagrant/provision/server/http/var/www/html
+
+cp -R /etc/httpd/conf.d/* \
+    /vagrant/provision/server/http/etc/httpd/conf.d/
+cp -R /var/www/html/* /vagrant/provision/server/http/var/www/html
+cp -R /var/named/* /vagrant/provision/server/dns/var/named/
+
+touch http.sh
+chmod +x http.sh
+```
+
+В файл ```/vagrant/provision/server/http.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y groupinstall "Basic Web Server"
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/http/etc/httpd/* /etc/httpd
+cp -R /vagrant/provision/server/http/var/www/* /var/www
+
+chown -R apache:apache /var/www
+
+restorecon -vR /etc
+restorecon -vR /var/www
+
+echo "Configure firewall"
+firewall-cmd --add-service=http
+firewall-cmd --add-service=http --permanent
+
+echo "Start http service"
+systemctl enable httpd
+systemctl start httpd
+```
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующую секцию:
+
+```conf
+server.vm.provision "server http",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/http.sh"
+```
 
 # Выводы
 
-Здесь кратко описываются итоги проделанной работы.
-
-# Список литературы{.unnumbered}
-
-::: {#refs}
-:::
+Я приобрёл практические навыки по установке и базовому конфигурированию HTTP-сервера Apache.
