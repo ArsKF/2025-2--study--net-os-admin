@@ -1,10 +1,8 @@
 ---
 ## Author
 author:
-  name: Дмитрий Сергеевич Кулябов
-  degrees: DSc
-  orcid: 0000-0002-0877-7063
-  email: kulyabov-ds@rudn.ru
+  name: Арсений Валерьевич Агаев
+  email: 1032221668@rudn.ru
   affiliation:
     - name: Российский университет дружбы народов
       country: Российская Федерация
@@ -12,13 +10,12 @@ author:
       city: Москва
       address: ул. Миклухо-Маклая, д. 6
 ## Title
-title: Структура научной презентации
-subtitle: Простейший вариант
+title: Лабораторная работа №8
+subtitle: Расширенные настройки межсетевого экрана
 license: CC BY
 date: today
 date-format: "YYYY-MM-DD" # Example: 2025-09-06
 ---
-
 # Информация
 
 ## Докладчик
@@ -26,175 +23,339 @@ date-format: "YYYY-MM-DD" # Example: 2025-09-06
 :::::::::::::: {.columns align=center}
 ::: {.column width="70%"}
 
-  * Кулябов Дмитрий Сергеевич
-  * д.ф.-м.н., профессор
-  * профессор кафедры теории вероятностей и кибербезопасности
+  * Арсений Валерьевич Агаев
+  * студент
   * Российский университет дружбы народов им. П. Лумумбы
-  * [kulyabov-ds@rudn.ru](mailto:kulyabov-ds@rudn.ru)
-  * <https://yamadharma.github.io/ru/>
+  * [1032221668@rudn.ru](mailto:1032221668@rudn.ru)
 
 :::
 ::: {.column width="30%"}
 
-![](./image/kulyabov.jpg)
-
 :::
 ::::::::::::::
 
-# Вводная часть
+# Цели и задачи
 
-## Актуальность
+Приобрести практические навыки по установке и конфигурированию SMTP-сервера.
 
-- Важно донести результаты своих исследований до окружающих
-- Научная презентация --- рабочий инструмент исследователя
-- Необходимо создавать презентацию быстро
-- Желательна минимизация усилий для создания презентации
+- Установить на ВМ ```server``` SMTP-сервер postfix
 
-## Объект и предмет исследования
+- Сделать первоначальную настройку postfix при помощи утилиты postconf
 
-- Презентация как текст
-- Программное обеспечение для создания презентаций
-- Входные и выходные форматы презентаций
+- Проверить отправку почты с сервера и клиента
 
-## Цели и задачи
+- Сконфигурировать Postfix для работы в домене. Проверить отправку почты
 
-- Создать шаблон презентации в Markdown
-- Описать алгоритм создания выходных форматов презентаций
+- Написать скрипт для Vagrant, фиксирующий действия по установке и настройке Postfix
 
-## Материалы и методы
+# Содержание отчета
 
-- Процессор `pandoc` для входного формата Markdown
-- Результирующие форматы
-	- `pdf`
-	- `html`
-- Автоматизация процесса создания: `Makefile`
+## Установка Postfix
 
-# Создание презентации
+Установил необходимые пакеты, добавил службу SMTP в firewalld, восстановил контекст 
+безопасности SELinux и запустил Postfix:
 
-## Процессор `pandoc`
+```
+dnf -y install postfix
+dnf -y install s-nail
 
-- Pandoc: преобразователь текстовых файлов
-- Сайт: <https://pandoc.org/>
-- Репозиторий: <https://github.com/jgm/pandoc>
+firewall-cmd --add-service=smtp
+firewall-cmd --add-service=smtp --permanent
+firewall-cmd --reload
 
-## Формат `pdf`
+restorecon -vR /etc
 
-- Использование LaTeX
-- Пакет для презентации: [beamer](https://ctan.org/pkg/beamer)
-- Тема оформления: `metropolis`
-
-## Код для формата `pdf`
-
-```yaml
-slide_level: 2
-aspectratio: 169
-section-titles: true
-theme: metropolis
+systemctl enable postfix
+systemctl start postfix
 ```
 
-## Формат `html`
+## Изменение параметров Postfix с помощью postconf
 
-- Используется фреймворк [reveal.js](https://revealjs.com/)
-- Используется [тема](https://revealjs.com/themes/) `beige`
+Посмотрел список текущих настроек Postfix:
 
-## Код для формата `html`
-
-- Тема задаётся в файле `Makefile`
-
-```make
-REVEALJS_THEME = beige
 ```
+postconf
+```
+
+Также текущие значения ```myorigin``` и ```mydomain```:
+
+```
+postconf myorigin
+
+postconf mydomain
+```
+
+После заменил значение ```myorigin``` и проверил изменение и корректность конфигурации:
+
+```
+postconf -e ‘myorigin = $mydomain’
+
+postconf myorigin
+
+postfix check
+```
+
+## Изменение параметров Postfix с помощью postconf
+
+Перезагрузил Postfix и вывел значения, отличные от значения по умолчанию:
+
+```
+postconf -n
+```
+
+После жёстко задал значение домена, отключил IPv6 и снова перезагрузил Postfix:
+
+```
+postconf -e 'mydomain = avagaev.net'
+
+postconf -e 'inet_protocols = ipv4'
+
+postfix check
+systemctl reload postfix
+```
+
+## Изменение параметров Postfix с помощью postconf
+
+![Настройка Postfix](image/1.png){#fig-001 width=70%}
+
+## Проверка работы Postfix
+
+Попытался отправить себе письмо под своей учётной записью на сервере:
+
+```
+echo .| mail -s test1 avagaev@server.avagaev.net
+```
+
+В дополнительном терминате запустил мониторинг работы почтовой службы и посмотрел, что 
+произошло с отправленным сообщением:
+
+```
+tail -f /var/log/maillog
+```
+
+## Проверка работы Postfix
+
+![Мониторинг почты](image/2.png){#fig-002 width=70%}
+
+## Проверка работы Postfix
+
+Письмо было доставлено и после удалено.
+
+На ВМ ```client``` также установил необходимые пакеты:
+
+```
+dnf -y install postfix
+dnf -y install s-nail
+```
+
+Отключил IPv6 и запустил Postfix. Следом отправил письмо с этой ВМ:
+
+```
+postconf -e 'inet_protocols = ipv4'
+
+systemctl enable postfix
+systemctl start postfix
+
+echo .| mail -s test1 avagaev@server.avagaev.net
+```
+
+## Проверка работы Postfix
+
+![Мониторинг почты 2](image/3.png){#fig-003 width=70%}
+
+Сообщение не было доставлено, новых записей не появилось.
+
+## Проверка работы Postfix
+
+Поэтому, на сервере изменил значения ```inet_interfaces``` и ```mynetworks``` и перезагрузил Postfix:
+
+```
+postconf -e 'inet_interfaces = all'
+
+postconf -e 'mynetworks = 127.0.0.0/8, 192.168.0.0/16'
+
+postfix check
+systemctl reload postfix
+```
+
+После повторил отправку почты с клиента.
+
+## Проверка работы Postfix
+
+![Мониторинг почты 3](image/4.png){#fig-004 width=70%}
+
+## Конфигурация Postfix для домена
+
+Попробовал отправить письмо на свой доменный адрес:
+
+```
+echo .| mail -s test2 avagaev@avgaev.net
+```
+
+![Мониторинг почты 4](image/5.png){#fig-005 width=70%}
+
+Из сообщения видно, что домен не был разрешен.
+
+## Конфигурация Postfix для домена
+
+Чтобы это решить, добавил MX-запись в файле прямой DNS-зоны:
+
+```conf
+...
+	A	192.168.1.1
+	MX 10   mail.avagaev.net.
+$ORIGIN avagaev.net.
+server  A	192.168.1.1
+ns 	A 	192.168.1.1
+dhcp 	A 	192.168.1.1
+www 	A 	192.168.1.1
+mail 	A 	192.168.1.1
+```
+
+И в файле обратной DNS-зоны:
+
+```conf
+...
+	PTR	server.avagaev.net.
+	MX 10 	mail.avagaev.net.
+$ORIGIN 1.168.192.in-addr.arpa.
+1	PTR 	server.avagaev.net.
+1 	PTR 	ns.avagaev.net.
+1 	PTR 	dhcp.avagaev.net.
+1 	PTR 	www.avagaev.net.
+1 	PTR 	mail.avagaev.net.
+```
+
+## Конфигурация Postfix для домена
+
+В конфигурацию Postfix добавил домен в список элементов сети:
+
+```
+postconf -e 'mydestination = $myhostname,localhost.$mydomain,localhost,$mydomain
+```
+
+Перезапустил конфигурацию Postfix, восстановил контекст безопасности SELinux, перезапустил DNS:
+
+```
+postfix check
+systemctl reload postfix
+
+restorecon -vR /etc
+restorecon -vR /var/named
+
+systemctl restart named
+```
+
+Попробовал отправить сообщение внонь.
+
+## Конфигурация Postfix для домена
+
+![Мониторинг почты 5](image/6.png){#fig-006 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+На ВМ ```server``` перешел в каталог для внесения изменений в настройки внутреннего окружения 
+```/vagrant/provision/server``` и зафиксировал проведенную работу:
+
+```
+cd /vagrant/provision/server
+
+cp -R /var/named/* /vagrant/provision/server/dns/var/named
+
+touch mail.sh
+chmod +x mail.sh
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+В файл ```/vagrant/provision/server/mail.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install postfix
+dnf -y install s-nail
+
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/mail/etc/* /etc
+
+echo "Configure firewall"
+firewall-cmd --add-service=smtp --permanent
+firewall-cmd --reload
+
+restorecon -vR /etc
+
+echo "Start postfix service"
+systemctl enable postfix
+systemctl start postfix
+
+echo "Configure postfix"
+postconf -e 'mydomain = avagaev.net'
+postconf -e 'myorigin = $mydomain'
+postconf -e 'inet_protocols = ipv4'
+postconf -e 'inet_interfaces = all'
+postconf -e 'mydestination = $myhostname,localhost.$mydomain,localhost,$mydomain'
+postconf -e 'mynetworks = 127.0.0.0/8, 192.168.0.0/16'
+
+postfix set-permissions
+
+restorecon -vR /etc
+
+systemctl stop postfix
+systemctl start postfix
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+Аналогично для ВМ ```client```:
+
+```
+cd /vagrant/provision/client
+
+touch mail.sh
+chmod +x mail.sh
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+В файл ```/vagrant/provision/client/mail.sh``` записал скрипт:
+
+```sh
+#!/bin/bash
+
+echo "Provisioning script $0"
+
+echo "Install needed packages"
+dnf -y install postfix
+dnf -y install s-nail
+
+echo "Configure postfix"
+postconf -e 'inet_protocols = ipv4'
+
+echo "Start postfix service"
+systemctl enable postfix
+systemctl start postfix
+```
+
+## Внесение изменений в настройки внутреннего окружения виртуальных машин
+
+Для отработки данных скриптов, внес изменения в Vagrantfile в соответсвующую секцию:
+
+```conf
+server.vm.provision "server mail",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/server/mail.sh"
+...
+server.vm.provision "client mail",
+   type: "shell",
+   preserve_order: true,
+   path: "provision/client/mail.sh"
+```
+
 # Результаты
 
-## Получающиеся форматы
-
-- Полученный `pdf`-файл можно демонстрировать в любой программе просмотра `pdf`
-- Полученный `html`-файл содержит в себе все ресурсы: изображения, css, скрипты
-
-# Элементы презентации
-
-## Актуальность
-
-- Даёт понять, о чём пойдёт речь
-- Следует широко и кратко описать проблему
-- Мотивировать свое исследование
-- Сформулировать цели и задачи
-- Возможна формулировка ожидаемых результатов
-
-## Цели и задачи
-
-- Не формулируйте более 1--2 целей исследования
-
-## Материалы и методы
-
-- Представляйте данные качественно
-- Количественно, только если крайне необходимо
-- Излишние детали не нужны
-
-## Содержание исследования
-
-- Предлагаемое решение задач исследования с обоснованием
-- Основные этапы работы
-
-## Результаты
-
-- Не нужны все результаты
-- Необходимы логические связки между слайдами
-- Необходимо показать понимание материала
-
-
-## Итоговый слайд
-
-- Запоминается последняя фраза. © Штирлиц
-- Главное сообщение, которое вы хотите донести до слушателей
-- Избегайте использовать последний слайд вида *Спасибо за внимание*
-
-# Рекомендую
-
-## Принцип 10/20/30
-
-  - 10 слайдов
-  - 20 минут на доклад
-  - 30 кегль шрифта
-
-## Связь слайдов
-
-::: incremental
-
-- Один слайд --- одна мысль
-- Нельзя ссылаться на объекты, находящиеся на предыдущих слайдах (например, на формулы)
-- Каждый слайд должен иметь заголовок
-
-:::
-
-## Количество сущностей
-
-::: incremental
-
-- Человек может одновременно помнить $7 \pm 2$ элемента
-- При размещении информации на слайде старайтесь чтобы в сумме слайд содержал не более 5 элементов
-- Можно группировать элементы так, чтобы визуально было не более 5 групп
-
-:::
-
-## Общие рекомендации
-
-::: incremental
-
-- На слайд выносится та информация, которая без зрительной опоры воспринимается хуже
-- Слайды должны дополнять или обобщать содержание выступления или его частей, а не дублировать его
-- Информация на слайдах должна быть изложена кратко, чётко и хорошо структурирована
-- Слайд не должен быть перегружен графическими изображениями и текстом
-- Не злоупотребляйте анимацией и переходами
-
-:::
-
-## Представление данных
-
-::: incremental
-
-- Лучше представить в виде схемы
-- Менее оптимально представить в виде рисунка, графика, таблицы
-- Текст используется, если все предыдущие способы отображения информации не подошли
-
-:::
+Я успешно приобрёл практические навыки по установке и конфигурированию SMTP-сервера.
